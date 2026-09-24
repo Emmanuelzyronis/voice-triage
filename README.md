@@ -32,17 +32,21 @@ The shared engine does:
 ```
 Call / voicemail
      ↓
- Transcription          ← AssemblyAI real-time STT
+ Transcription          ← AssemblyAI DictationTranscriber
      ↓
- Extract intent         ← Structured parse with evidence taxonomy
+ Extract intent         ← Structured parse + evidence taxonomy (observed / inferred / unknown)
      ↓
- Draft action           ← Slot-based output (not free prose)
+ Classify               ← TriageCategory + LangGraph conditional routing
      ↓
- Surface unknowns       ← observed / inferred / unknown — explicit
+ Retrieve context       ← ChromaDB, tenant-namespaced knowledge base
      ↓
- Human approval         ← Gate enforced in code, not convention
+ Draft action           ← Slot-based output grounded in retrieved context
      ↓
- Execute                ← Into tenant's system, full audit trail
+ Adversarial review     ← "Find 3 reasons this draft might be wrong" before human sees it
+     ↓
+ Human approval         ← Gate enforced in code (PipelineStateError if bypassed)
+     ↓
+ Execute                ← Structured result panel — full audit trail
 ```
 
 The voice input is one channel. The valuable asset is the **workflow / approval / audit infrastructure underneath** — vertical-specific behaviour becomes configuration, not code.
@@ -219,9 +223,9 @@ Tenants configure their own pipelines without code.
 | Layer | Choice | Why |
 |---|---|---|
 | STT | AssemblyAI SDK | Real-time streaming, punctuation, low latency. Required for hackathon. |
-| Pipeline | LangGraph | Explicit stage graph, deterministic state transitions, auditable |
+| Pipeline | LangGraph | StateGraph with conditional routing per TriageCategory, deterministic state transitions, auditable |
 | Vector store | ChromaDB | Local-first, no external service dependency, namespaced per tenant |
-| LLM | Azure OpenAI (gpt-4o) | Structured output, deterministic at temp=0, enterprise SLA |
+| LLM | Azure OpenAI (gpt-5-mini) | Structured output, deterministic at temp=0, enterprise SLA |
 | Backend | FastAPI + Uvicorn | Async WebSocket, typed routes, fast |
 | Frontend | Next.js + Tailwind | Approval UI, real-time transcript, SSR |
 | Auth | Clerk | Multi-tenant auth, user roles, JWT |
@@ -274,13 +278,13 @@ cp backend/.env.example backend/.env
 # Install backend
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[mic]"         # [mic] pulls pyaudio for local mic test
+pip install -e "."              # add [mic] only if PortAudio is installed (brew install portaudio / apt install portaudio19-dev)
 
 # Day 1 smoke test — speak, see transcript
 python -m backend.scripts.test_mic
 
 # Run server
-uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --reload --port 8001
 
 # Frontend (separate terminal)
 cd ../frontend
@@ -296,7 +300,7 @@ npm install && npm run dev
 ASSEMBLYAI_API_KEY=             # app.assemblyai.com
 AZURE_OPENAI_ENDPOINT=          # https://your-resource.openai.azure.com/
 AZURE_OPENAI_API_KEY=
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
 CHROMA_PERSIST_DIRECTORY=./chroma_db
 MAX_RETRIES=3
 APPROVAL_TIMEOUT_SECONDS=300

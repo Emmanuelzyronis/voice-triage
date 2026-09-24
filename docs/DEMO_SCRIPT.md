@@ -14,7 +14,7 @@ Hook judges with the working product, close with the expansion vision.
 - Demo tenant seeded: Apex Field Services knowledge base (FAQ, dispatch policies, team directory)
 - Browser open at `localhost:3000`
 - Terminal visible — backend logs filtered to stage transitions only (no noise)
-- Three browser tabs ready: main UI, audit JSON viewer, tenant config YAML
+- Two browser tabs ready: main approval UI at localhost:3000, and the audit JSON viewer at localhost:3000/audit (or terminal `cat` of audit file)
 - Mic tested, quiet room, no background noise
 - Run one full test pass before recording — confirm all 8 stages complete
 
@@ -42,14 +42,13 @@ No action on screen yet. Title card: **ArkOps** — *AI that turns operational c
 > technician today or first thing Thursday at the latest."
 
 **What to show:**
-- Words appearing word-by-word in the LiveTranscript panel as you speak
-- Pause at the end — show the final punctuated transcript appear
+- "Transcribing…" spinner appears in the TranscriptPanel while audio processes
+- When AssemblyAI finishes, the full punctuated transcript snaps into view at once
 - Stage indicator animates: **LISTEN** ✓ → **PARSE** (spinning)
 
 **Voiceover:**
-> "AssemblyAI's real-time streaming STT picks up every word as it's spoken.
-> When the caller stops, it delivers the final punctuated transcript and
-> the pipeline starts automatically."
+> "AssemblyAI processes the audio and delivers the final punctuated transcript.
+> The pipeline starts automatically as soon as transcription is complete."
 
 ---
 
@@ -134,36 +133,46 @@ Caveats:
 
 **Voiceover:**
 > "The approval gate shows everything at once — the caller's exact words, the
-> evaluation verdict, and the draft side by side. The dispatcher can approve it
+> evaluation verdict, and the draft side by side. The reviewer can approve it
 > as-is, edit the draft before approving, or reject with a reason. There is no
 > button that bypasses this. The pipeline doesn't have a path to Execute without
 > an Approved state."
 
 ---
 
-### 2:20–2:40 — Approve + Audit trail
+### 2:20–2:40 — Approve + Executed panel + Audit trail
 
-**Action:** Click APPROVE. Then switch to the audit tab.
+**Action:** Click APPROVE. The ExecutedPanel renders immediately.
 
 **What to show:**
-- EXECUTING state → COMPLETE ✓
-- Switch to terminal: `cat audit/demo-fieldops/{state_id}.json` — show the full record briefly
+```
+✓ EXECUTED
+
+Work order reference:  apex-field-services-8d2f91c4
+Action items taken:
+  · Emergency work order created — Building 4B HVAC unit
+  · Technician assignment queued for today / Thursday AM
+  · Building manager notification logged
+Timestamp: 2026-09-29T14:23:07Z
+```
+- Then switch to audit tab: `cat audit/apex-field-services/{state_id}.json` — show the full record briefly
   (don't read it — just show it exists and is structured)
 
 **Voiceover:**
-> "Approved. The work order is queued. The audit trail is written before execution —
-> every decision in that run: the caller's words, what was retrieved, the evaluation
-> verdict, who approved it and when. If anything is ever disputed, the record is there."
+> "Approved. The execution result is on screen — the work order reference, every action taken,
+> the timestamp. The audit trail is written before execution: the caller's words, what was
+> retrieved, the evaluation verdict, who approved it and when. If anything is ever disputed,
+> the record is there."
 
 ---
 
 ### 2:40–2:55 — Tenant config (15 seconds)
 
-**Action:** Switch to the third tab — `tenant_demo.yaml`
+**Action:** Switch to the terminal — `cat backend/tenants/apex_field_services.yaml`
 
 **What to show:**
 ```yaml
-tenant_id: demo-fieldops
+tenant_id: apex-field-services
 name: Apex Field Services
 ai_instructions: |
   This is a field operations company handling HVAC, plumbing, and electrical.
@@ -173,6 +182,7 @@ approval_rules:
   escalate: human_required
   info_request: auto_approve
   defer: auto_approve
+  ambiguous: human_required
 integrations:
   - webhook
 ```

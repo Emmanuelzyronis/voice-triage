@@ -1,181 +1,241 @@
-# ArkOps — Hackathon Sprint Plan (Phase 0)
+# ArkOps — Sprint Plan (Phase 0)
 
 **Deadline: September 30, 2026 @ 11:00 AM EDT**
-**Today: September 24, 2026**
-**Days remaining: 6**
+**Submission: lablab.ai AssemblyAI Voice Agent Hackathon**
 **Goal: Prove the engine is real. Ship Phase 0.**
 
-The hackathon submission is Phase 0 of ArkOps — the core pipeline working for a
-single demo tenant in the field operations vertical. Everything we build here
-is production-intended code, not throwaway demo code.
+Work is organised by layers, not days. Each layer has a gate — a condition that must be
+true before the next layer begins. Finish early and you deepen the current layer, not skip
+the gate.
 
 ---
 
-## Day 1 — Sep 24 · Engine Smoke Test
+## Decisions locked
 
-**Goal:** AssemblyAI STT confirmed working. Transcript appears in terminal.
+These were decided after a full cross-doc review. They apply everywhere.
 
-### Tasks
-- [x] `backend/` Python project: `pyproject.toml`, venv
-- [x] `backend/models/types.py` — full type hierarchy (PipelineState, Evidence, DraftSlots, etc.)
-- [x] `backend/pipeline/listen.py` — RealtimeTranscriber, WebSocket + mic modes
-- [x] `backend/pipeline/parse.py` — ParseStage, AzureChatOpenAI, evidence taxonomy
-- [x] `backend/pipeline/classify.py` — ClassifyStage, TriageCategory
-- [x] `backend/pipeline/research.py` — ResearchStage, ChromaDB retrieval
-- [x] `backend/pipeline/draft.py` — DraftStage, DraftSlots structured output
-- [x] `backend/pipeline/evaluate.py` — EvaluateStage, adversarial self-review
-- [x] `backend/pipeline/approve.py` — ApproveStage, async human gate
-- [x] `backend/pipeline/execute.py` — ExecuteStage, dispatch on TriageCategory
-- [x] `backend/main.py` — FastAPI: WS /ws/audio, POST /approve/{id}, GET /health
-- [x] `backend/scripts/test_mic.py` — mic smoke test
-- [ ] **Run mic test** → confirm transcript prints to terminal
-- [ ] Fix any import / env errors that surface
-
-**Done when:** "Customer calling about broken HVAC, need a tech Thursday" spoken → clean transcript in terminal.
+| # | Decision |
+|---|---|
+| 1 | **TenantConfig** — real abstraction, wired into every stage and `PipelineState`. Demo YAML for Apex Field Services. |
+| 2 | **EXECUTED** — structured UI panel (action items, work order reference, timestamp). No outbound webhook for Phase 0. |
+| 3 | **Partial transcripts** — cut. Frontend shows "Transcribing…" spinner while audio processes, snaps to full text. `DictationTranscriber` stays. |
+| 4 | **LangGraph** — build it. Stages become graph nodes. Real branching: `ESCALATE` skips Draft/Evaluate straight to Approve. `AMBIGUOUS` halts at Approve for human clarification. `INFO_REQUEST` routes through auto-approve if tenant rule allows. |
+| 5 | **Adversarial eval** — real. Prompt asks model to find 3 specific reasons the draft might be wrong before issuing per-criterion verdicts. |
+| 6 | **Audit path** — `audit/{tenant_id}/{state_id}.json`. Tenant-namespaced from day one. |
+| 7 | **LLM model** — `gpt-5-mini` everywhere. No `gpt-4o` in any doc or code. |
 
 ---
 
-## Day 2 — Sep 25 · Tenant Config + Pipeline Wired
+## Layer 0 — Foundation ✅ DONE
 
-**Goal:** Pipeline runs end-to-end for the demo tenant. TenantConfig in every stage.
+### Verified
+- [x] Python project: `pyproject.toml`, `.venv`, all dependencies installed
+- [x] `backend/.env` — AssemblyAI + Azure OpenAI keys, module-relative path
+- [x] `backend/models/types.py` — `PipelineState`, `Evidence`, `DraftSlots`, `Transcript`, all enums
+- [x] All 8 pipeline stages scaffolded with real LLM calls (not stubs)
+- [x] `backend/main.py` — FastAPI: `WS /ws/audio`, `POST /approve/{id}`, `GET /health`
+- [x] AssemblyAI confirmed live: `POST .../transcribe/live → 200 OK`
+- [x] Server runs clean, REST + WebSocket endpoints tested
 
-### Tasks
-- [ ] `backend/models/tenant.py` — TenantConfig Pydantic model
-  - `tenant_id`, `name`, `ai_instructions`, `approval_rules`, `allowed_categories`, `integrations`
-- [ ] `backend/config/tenant_demo.yaml` — Field operations demo tenant
-  - AI instructions: HVAC/field-service domain, work-order terminology
-  - Approval rules: `action_required → human_required`, `info_request → auto_approve`
-  - Integrations: webhook
-- [ ] Wire `tenant_id` into `PipelineState`
-- [ ] Inject `tenant.ai_instructions` into ParseStage and DraftStage system prompts
-- [ ] `backend/knowledge/seed_demo.py` — seed ChromaDB with 20–30 field-ops chunks
-  - Company FAQ, dispatch policies, service area, team directory, escalation rules
-- [ ] End-to-end test (terminal only, no frontend yet):
-  - Hardcode a transcript → run all 8 stages → print PipelineState to stdout
-- [ ] Confirm: `APPROVED` state required before ExecuteStage runs
-
-**Done when:** Fixed transcript for field-ops scenario → full PipelineState JSON printed with non-null fields in every stage slot.
+**Gate:** Server returns `{"status": "ok"}`, WebSocket handshake delivers `session_started`. ✅
 
 ---
 
-## Day 3 — Sep 26 · Approval API + Audit Trail
+## Layer 1 — Pipeline Engine
 
-**Goal:** Approval gate testable via curl. Audit log written to disk.
+Every stage produces real output for a real input. The LangGraph graph defines the routing.
+`TenantConfig` flows through every stage. All 8 `PipelineState` slots are non-null by the end.
 
-### Tasks
-- [ ] `backend/audit/log.py` — write PipelineState as atomic JSON to `audit/` directory
-  - File per run: `{state_id}.json`
-  - Written before Execute, not after
-- [ ] Test `POST /approve/{id}` via curl:
-  - `{"status": "approved"}` → pipeline completes
-  - `{"status": "rejected", "reviewer_note": "wrong customer"}` → pipeline ends, state logged
-  - `{"status": "edited", "edited_body": "..."}` → edited draft used
-- [ ] Test timeout: set `APPROVAL_TIMEOUT_SECONDS=10`, let it expire → auto-reject logged
-- [ ] `GET /state/{id}` returns full PipelineState JSON (confirm all fields serialise cleanly)
-- [ ] `GET /audit/{id}` endpoint to read a completed run's audit record
+### Foundations
+- [ ] `backend/models/tenant.py` — `TenantConfig` Pydantic model
+  ```python
+  class TenantConfig(BaseModel):
+      tenant_id: str
+      name: str
+      ai_instructions: str        # injected into Parse + Draft system prompts
+      approval_rules: dict        # {"info_request": "auto_approve", "escalate": "human_required", ...}
+      allowed_categories: list[TriageCategory]
+      integrations: list[str]     # ["webhook"] — Phase 1
+  ```
+- [ ] Add `AMBIGUOUS` to `TriageCategory` enum in `types.py`
+- [ ] Add `tenant_id: str` and `tenant: TenantConfig` to `PipelineState`
+  - Default `tenant_id` to empty string so existing `PipelineState()` call in `main.py` still works during migration
+- [ ] `backend/tenants/apex_field_services.yaml` — demo tenant config
+  - `ai_instructions`: HVAC / field-service domain, work-order vocabulary, Apex Field Services context
+  - `approval_rules`: `action_required → human_required`, `info_request → auto_approve`, `escalate → human_required`, `defer → auto_approve`, `ambiguous → human_required`
+  - `allowed_categories`: all five
+- [ ] `backend/tenants/loader.py` — load `TenantConfig` from YAML by `tenant_id`
 
-**Done when:** Three curl scenarios work. Audit JSON written and readable.
+### Graph
+- [ ] `backend/pipeline/graph.py` — LangGraph `StateGraph` with all 8 nodes
+  - Node per stage: `listen`, `parse`, `classify`, `research`, `draft`, `evaluate`, `approve`, `execute`
+  - Conditional routing after `classify`:
+    - `ACTION_REQUIRED` → `research` → `draft` → `evaluate` → `approve` → `execute`
+    - `INFO_REQUEST` → `research` → `draft` → `evaluate` → [`auto_approve` or `approve`] → `execute`
+    - `ESCALATE` → `approve` (skip research, draft, evaluate — human sees raw transcript + reason)
+    - `DEFER` → `execute` (log to queue, no approval needed)
+    - `AMBIGUOUS` → `approve` (halt, human sees what the model couldn't determine)
+  - `INFO_REQUEST` auto-approve edge: checks `tenant.approval_rules["info_request"] == "auto_approve"`
+  - Replace sequential calls in `main.py` with graph invocation
+
+### Stage fixes
+- [ ] **ParseStage** — inject `tenant.ai_instructions` into system prompt
+- [ ] **ClassifyStage** — add `classify_reason: str` field to `PipelineState`; store reason, don't just log it
+- [ ] **ClassifyStage** — check `allowed_categories`; route unknown categories to `DEFER`
+- [ ] **ResearchStage** — namespace ChromaDB collection as `{tenant_id}_knowledge_base`
+- [ ] **ResearchStage** — filter results: drop chunks where `relevance_score < 0.5`
+- [ ] **DraftStage** — inject `tenant.ai_instructions` into system prompt
+- [ ] **All LLM stages** — add JSON retry (max 2 attempts) around `json.loads`; log each retry
+
+### Knowledge base
+- [ ] `backend/knowledge/seed_demo.py` — seed `apex_field_services_knowledge_base` ChromaDB collection
+  - 20–30 chunks: company FAQ, dispatch policies, service area, team directory, escalation rules
+- [ ] Verify retrieval: 3 sample queries return relevant chunks with score > 0.5
+
+### CLI test
+- [ ] `backend/scripts/run_pipeline.py` — hardcode a transcript → invoke LangGraph → print `PipelineState` JSON
+- [ ] Confirm `ExecuteStage` cannot run without `approval.status == APPROVED` (assert raises, not silent return)
+
+**Gate:** `"Customer calling about broken HVAC, need emergency tech Thursday"` → full `PipelineState`
+JSON with all slots non-null, graph route `ACTION_REQUIRED → research → draft → evaluate → approve (pending)`.
 
 ---
 
-## Day 4 — Sep 27 · Next.js Frontend
+## Layer 2 — Correctness + Audit
 
-**Goal:** Full approval UI working in browser. End-to-end in the browser, not just terminal.
+The gate is structurally enforced. Every run produces an immutable audit record. Edge cases tested.
 
-### Tasks
+### Enforcement
+- [ ] Create `backend/pipeline/errors.py` — define `PipelineStateError`
+- [ ] `ExecuteStage.run()` — raise `PipelineStateError` if `approval` is `None` or status is not `APPROVED`/`EDITED`. Not a silent return.
+- [ ] Write a test: call `ExecuteStage().run(state)` with no approval decision → must raise `PipelineStateError`
+
+### Evaluate fix
+- [ ] **EvaluateStage** — rewrite system prompt to adversarial framing:
+  > *"You are an adversarial reviewer. Before assessing each criterion, list three specific
+  > reasons this draft might be wrong or misleading given the caller's actual words and the
+  > retrieved context. Then, for each criterion, assess whether any of your concerns apply."*
+- [ ] **EvaluateStage** — pass `state.context` to the LLM so factual grounding can be checked
+- [ ] Verify: run the same transcript with a good draft vs. a deliberately bad one → different `overall` verdicts
+
+### Audit
+- [ ] `backend/audit/log.py` — atomic JSON write to `audit/{tenant_id}/{state_id}.json`
+  - Written at APPROVE stage, before Execute begins
+  - Contents: full `PipelineState` serialised (transcript, parsed, category, reason, context, draft, evaluation, approval)
+- [ ] `GET /audit/{state_id}` endpoint — reads and returns the audit file; scoped to `tenant_id` from session
+
+### WebSocket stage events
+- [ ] Add per-stage events to `_run_pipeline` in `main.py`:
+  ```json
+  {"type": "stage_update", "stage": "parse", "status": "running"}
+  {"type": "stage_update", "stage": "parse", "status": "complete"}
+  ```
+  Frontend `PipelineStatus.tsx` depends on these.
+
+### Approval scenarios (curl tests)
+- [ ] `{"status": "approved"}` → pipeline completes, `executed=True`, audit written
+- [ ] `{"status": "rejected", "reviewer_note": "wrong customer"}` → pipeline ends, audit written, `executed=False`
+- [ ] `{"status": "edited", "edited_body": "..."}` → edited body stored, pipeline completes
+  - Fix: `main.py` must convert `edited_body: str` → `DraftSlots(body=edited_body)` before passing to `ApprovalDecision`
+- [ ] Timeout: `APPROVAL_TIMEOUT_SECONDS=5` → auto-reject fires, audit written
+
+### NEEDS_EDIT behaviour (resolved)
+- `overall == "NEEDS_EDIT"` → proceed to Approve with a warning banner. Human sees the issues. Not a blocker, not an auto-loop.
+
+**Gate:** All 4 curl scenarios produce correct state. Audit file exists on disk. `PipelineStateError` raised on unapproved execute. Adversarial eval produces different verdicts for good vs. bad draft.
+
+---
+
+## Layer 3 — Frontend
+
+The full flow runs in a browser. A reviewer can speak, watch the pipeline, and make an
+approval decision without touching a terminal.
+
+### Scaffold
 - [ ] `frontend/` — Next.js 15 + Tailwind + TypeScript
-  - `npm create next-app frontend --typescript --tailwind`
-- [ ] `MicCapture.tsx` — browser mic access, stream PCM to backend WebSocket, level meter
-- [ ] `LiveTranscript.tsx` — receives partial + final transcripts over WS, shows in real time
-- [ ] `PipelineStatus.tsx` — stage indicators: LISTEN / PARSE / CLASSIFY / ... lighting up
+
+### Components
+- [ ] `MicCapture.tsx` — browser mic access, PCM stream to backend WebSocket, level meter
+- [ ] `TranscriptPanel.tsx` — shows "Transcribing…" spinner while audio processes; snaps to full final transcript when ready. No word-by-word streaming.
+- [ ] `PipelineStatus.tsx` — stage indicators: LISTEN / PARSE / CLASSIFY / RESEARCH / DRAFT / EVALUATE / APPROVE — each lights up in sequence from WebSocket `stage_update` events
 - [ ] `ApprovalGate.tsx` — three panels:
-  - Left: original transcript + confidence
-  - Centre: evaluation verdict per criterion (PASS/FAIL)
-  - Right: draft (summary, action items, caveats)
+  - **Left**: transcript + classification + reason + urgency
+  - **Centre**: evaluation verdict per criterion (addresses_intent / factually_grounded / tone_appropriate, PASS/FAIL), `issues_found` list, `NEEDS_EDIT` warning banner if applicable
+  - **Right**: draft (body, action items, caveats). Unknown items from `evidence.unknown` highlighted distinctly.
   - Buttons: APPROVE / EDIT+APPROVE / REJECT
-- [ ] Wire: APPROVE button → `POST /approve/{id}` → pipeline completes → show EXECUTED state
-- [ ] Minimal, clean — dark background, clear typography. Not polished, but readable in a demo video.
+- [ ] `ExecutedPanel.tsx` — shown after APPROVE; displays structured execution result:
+  - Action items taken
+  - Work order reference (generated `{tenant_id}-{state_id[:8]}`)
+  - Timestamp
+  - Audit record link
+- [ ] Wire: APPROVE → `POST /approve/{id}` → pipeline completes → `ExecutedPanel` renders
+- [ ] Wire: `PipelineStatus` updates from `stage_update` WebSocket events
 
-**Done when:** Speak into browser mic → transcript appears → pipeline stages light up → approval UI renders → click APPROVE → EXECUTED state shown.
+### Routing (LangGraph visibility)
+- [ ] ESCALATE route: skip Research/Draft/Evaluate panels; show "ESCALATED — awaiting reviewer decision"
+- [ ] AMBIGUOUS route: show "Intent unclear" banner in Approve panel with `evidence.unknown` list
+- [ ] DEFER route: skip Approve; show "Deferred — logged to queue"
+
+**Gate:** Speak in browser → "Transcribing…" appears → full transcript snaps in → stage indicators
+light up → approval UI renders → click APPROVE → `ExecutedPanel` shown. No terminal required.
 
 ---
 
-## Day 5 — Sep 28 · Integration Testing + Demo Prep
+## Layer 4 — Demo + Submission
 
-**Goal:** Three scenarios recorded cleanly. Slide deck done.
+Three scenarios. Video recorded. Submitted before deadline.
 
-### Tasks
-- [ ] **Scenario 1 (main):** "Customer calling about broken HVAC, need emergency tech Thursday, been waiting 3 days"
-  - Classify: ACTION_REQUIRED
-  - Draft: work order, urgency HIGH, escalation recommended
-  - Approve → Execute
-- [ ] **Scenario 2 (info request):** "What's our service area for commercial HVAC?"
-  - Classify: INFO_REQUEST
-  - Draft: pulls knowledge base answer
-  - Auto-approve (per tenant approval rule) → Execute immediately
-- [ ] **Scenario 3 (ambiguous):** "Send the thing to that customer from earlier"
-  - Classify: DEFER or AMBIGUOUS
-  - Draft surfaces unknowns: "referent unclear — which customer, which document?"
-  - Approve UI shows human what's missing
-- [ ] `docs/PITCH.md` — platform vision doc for submission
-  - Problem / Engine / Multi-tenant vision / Expansion path / Why ArkOps wins
+### Scenarios
+- [ ] **Scenario 1 — Action required:**
+  *"Customer calling about broken HVAC, need emergency tech Thursday, been waiting 3 days"*
+  Route: `ACTION_REQUIRED` → full pipeline → APPROVE → EXECUTED panel
+- [ ] **Scenario 2 — Auto-approve info request:**
+  *"What's our service area for commercial HVAC?"*
+  Route: `INFO_REQUEST` → auto-approve (Apex tenant rule) → EXECUTED immediately — no human click needed
+- [ ] **Scenario 3 — Ambiguous:**
+  *"Send the thing to that customer from earlier"*
+  Route: `AMBIGUOUS` → Approve halts; human sees `evidence.unknown` ("referent unclear — which customer, which document"); REJECT with note
+
+### Polish
+- [ ] Verify `evidence.unknown` items are visible and prominent in the approval UI
+- [ ] Verify adversarial eval shows specific `issues_found` (not empty) on at least one scenario
+- [ ] Verify audit JSON is written after each scenario and contains the expected fields
+
+### Submission
+- [ ] MIT LICENSE present, `.env.example` accurate, no secrets in git
+- [ ] README Quick Start tested on a clean clone
 - [ ] Slide deck (5 slides: Problem / Engine / Demo / Platform Vision / Try It)
-- [ ] Verify: MIT LICENSE, `.env.example` present, no secrets in git
-
-**Done when:** All three scenarios run cleanly. Slides drafted.
-
----
-
-## Day 6 — Sep 29 · Record + Submit Prep
-
-**Goal:** Video recorded. Everything ready to submit by morning.
-
-### Tasks
-- [ ] Record demo video — follow `docs/DEMO_SCRIPT.md` exactly (target: 3 minutes)
+- [ ] Record demo video — follow `docs/DEMO_SCRIPT.md` (target: 3 minutes)
 - [ ] Upload video (YouTube unlisted)
-- [ ] Final `git push` — repo public, clean, README accurate
-- [ ] lablab.ai submission form:
-  - Project name: ArkOps
-  - Repo: `https://github.com/Emmanuelzyronis/voice-triage`
-  - Video URL
-  - Team: Zyronis
-- [ ] **Fill form by 10:00 PM — submit by 10:30 PM** (not morning — don't risk it)
+- [ ] lablab.ai submission form: Project: ArkOps · Repo: `https://github.com/Emmanuelzyronis/voice-triage` · Team: Zyronis
 
----
-
-## Day 7 — Sep 30 · SUBMIT
-
-**Deadline: 11:00 AM EDT — form must be submitted**
-
-- [ ] Confirm submission received on lablab.ai
-- [ ] Done
+**Hard gate: form submitted by Sep 29, 10:30 PM EDT. Not Sep 30 morning.**
 
 ---
 
 ## Contingency
 
-If Day 4 (frontend) takes longer than planned:
-- Cut live transcript display — show the final transcript only (static, not streaming)
-- The approval gate (three panels + buttons) is non-negotiable for the demo
-- The pipeline correctness is the differentiator — don't let frontend polish block submission
+**If Layer 3 runs long:**
+- Cut ESCALATE + AMBIGUOUS routing in the UI (show generic state)
+- Keep the three-panel approval gate — non-negotiable
+- The pipeline correctness (LangGraph routing, adversarial eval, structural approval gate) is the differentiator; don't let frontend polish block submission
 
-If Day 5 scenarios reveal pipeline bugs:
-- Fix the bug, not the test
-- If a stage consistently fails on voice input, add a retry (max 2) before surfacing to human
+**If a stage produces bad output on real voice:**
+- Fix the prompt/logic, not the test input
+- Add retry (max 2) if not already present
+- Surface the failure to the human reviewer — never hide it
 
 ---
 
 ## What Phase 0 Proves
 
-That the engine is real. Specifically:
-
-1. AssemblyAI real-time STT works and produces clean final transcripts
-2. Parse extracts structured intent with explicit uncertainty (the evidence taxonomy)
-3. Classify routes correctly for multiple input types
-4. Draft produces slot-based output — not free prose — grounded in retrieved context
+1. AssemblyAI STT works and produces clean final transcripts
+2. Parse extracts structured intent with explicit uncertainty (`observed / inferred / unknown`)
+3. LangGraph routes correctly — different inputs take different paths through the graph
+4. Draft produces slot-based output grounded in retrieved context — not hallucinated prose
 5. Evaluate reviews adversarially before the human sees anything
-6. The approval gate cannot be bypassed in code
-7. Audit trail is written before execution
+6. The approval gate raises `PipelineStateError` if bypassed — enforced in code, not convention
+7. Audit trail written to `audit/{tenant_id}/{state_id}.json` before execution — immutable
 
-Phase 1 (post-hackathon) adds: persistent DB, real phone numbers, Twilio, tenant onboarding, billing.
-The code written here is Phase 1's foundation, not throwaway demo code.
+Phase 1 (post-hackathon): persistent DB, Twilio, real phone numbers, tenant onboarding, billing.
+This code is Phase 1's foundation — not throwaway demo code.
