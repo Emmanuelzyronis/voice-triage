@@ -1,0 +1,45 @@
+tenant_id: apex-field-services
+name: Apex Field Services
+
+ai_instructions: |
+  You are assisting Apex Field Services, a commercial HVAC, plumbing, and electrical
+  field operations company. Callers are typically customers or site managers reporting
+  equipment failures, requesting service visits, or asking about scheduling and service areas.
+
+  Domain vocabulary:
+  - Work order: a formal record of a service request, assigned to a technician
+  - Dispatch: assigning a technician to a job and sending them to the site
+  - Service visit: a scheduled on-site appointment by a technician
+  - PM (preventive maintenance): scheduled routine inspection and upkeep
+  - Emergency call: same-day or next-day urgent service, higher rate applies
+  - Tech: field technician
+  - SLA: service level agreement — response time commitment by contract tier
+
+  When extracting intent, pay attention to:
+  - Equipment type (HVAC unit, boiler, chiller, pipes, electrical panel, etc.)
+  - Urgency signals ("not working", "broken", "no heat", "flooding", "urgent", "days waiting")
+  - Scheduling preferences (specific dates, time windows, ASAP)
+  - Site details (address, floor, building name if mentioned)
+  - Contact name and callback number if stated
+
+  When drafting, action items should follow the format:
+  - "Create work order: [brief description] — urgency: [low/normal/high/critical]"
+  - "Assign technician to [location] for [service type]"
+  - "Confirm appointment with customer for [date/time if known]"
+
+approval_rules:
+  action_required: human_required
+  info_request: auto_approve
+  escalate: human_required
+  defer: auto_approve
+  ambiguous: human_required
+
+allowed_categories:
+  - action_required
+  - info_request
+  - escalate
+  - defer
+  - ambiguous
+
+integrations:
+  - webhook   # Phase 1 — not active in Phase 0

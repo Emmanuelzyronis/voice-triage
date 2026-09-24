@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from backend.models.tenant import TenantConfig
 
 
 class TranscriptWord(BaseModel):
@@ -27,6 +30,7 @@ class TriageCategory(str, Enum):
     INFO_REQUEST    = "info_request"      # user wants information
     ESCALATE        = "escalate"          # needs human expert immediately
     DEFER           = "defer"             # low priority, queue it
+    AMBIGUOUS       = "ambiguous"         # intent cannot be determined
 
 
 class ConfidenceLevel(str, Enum):
@@ -87,20 +91,33 @@ class ApprovalDecision(BaseModel):
     decided_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ExecuteResult(BaseModel):
+    work_order_ref: str              # "{tenant_id}-{state_id[:8]}"
+    action_items_taken: list[str]
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    notes: str = ""
+
+
 class PipelineState(BaseModel):
     """Single object tracking one voice request through all 8 stages."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Tenant context
+    tenant_id: str = ""
+    tenant: Any | None = None        # TenantConfig — Any to avoid circular import
+
     # Stage outputs — None means stage hasn't run yet
-    transcript:  Transcript | None = None
-    parsed:      ParsedIntent | None = None
-    category:    TriageCategory | None = None
-    context:     list[ContextItem] = []
-    draft:       DraftSlots | None = None
-    evaluation:  EvaluationVerdict | None = None
-    approval:    ApprovalDecision | None = None
-    executed:    bool = False
+    transcript:       Transcript | None = None
+    parsed:           ParsedIntent | None = None
+    category:         TriageCategory | None = None
+    classify_reason:  str = ""
+    context:          list[ContextItem] = []
+    draft:            DraftSlots | None = None
+    evaluation:       EvaluationVerdict | None = None
+    approval:         ApprovalDecision | None = None
+    executed:         bool = False
+    executed_result:  ExecuteResult | None = None
 
     # Audit log — every stage appends here
     audit: list[str] = []

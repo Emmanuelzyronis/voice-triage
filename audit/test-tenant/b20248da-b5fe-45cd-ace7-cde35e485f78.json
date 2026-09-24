@@ -1,0 +1,37 @@
+{
+  "state_id": "b20248da-b5fe-45cd-ace7-cde35e485f78",
+  "tenant_id": "test-tenant",
+  "created_at": "2026-09-24T11:06:50.162352",
+  "transcript": {
+    "session_id": "t1",
+    "text": "test transcript",
+    "words": [],
+    "is_final": true,
+    "received_at": "2026-09-24T11:06:50.162366"
+  },
+  "parsed": null,
+  "category": "action_required",
+  "classify_reason": "",
+  "context": [],
+  "draft": {
+    "greeting": "",
+    "body": "We will send a tech.",
+    "action_items": [
+      "Dispatch technician"
+    ],
+    "closing": "",
+    "caveats": []
+  },
+  "evaluation": null,
+  "approval": {
+    "status": "rejected",
+    "reviewer_note": "Auto-rejected: no decision within 1s",
+    "edited_draft": null,
+    "decided_at": "2026-09-24T11:06:51.163558"
+  },
+  "executed_result": null,
+  "audit_log": [
+    "[2026-09-24T11:06:50.162379] approve: waiting for human decision (category=TriageCategory.ACTION_REQUIRED, has_draft=True)",
+    "[2026-09-24T11:06:51.163521] approve: timed out after 1s \u2014 auto-rejecting"
+  ]
+}

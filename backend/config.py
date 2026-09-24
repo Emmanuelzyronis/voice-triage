@@ -11,7 +11,8 @@ class Settings(BaseSettings):
     assemblyai_api_key: str
     azure_openai_endpoint: str
     azure_openai_api_key: str
-    azure_openai_deployment: str = "gpt-4o"
+    azure_openai_deployment: str = "gpt-5-mini"
+    azure_openai_api_version: str = "2025-01-01-preview"
     chroma_persist_directory: str = "./chroma_db"
 
     # Pipeline behaviour

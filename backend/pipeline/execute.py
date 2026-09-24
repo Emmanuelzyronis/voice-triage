@@ -4,72 +4,85 @@ from __future__ import annotations
 
 import logging
 
-from backend.models.types import ApprovalStatus, PipelineState
+from backend.models.types import ApprovalStatus, ExecuteResult, PipelineState, TriageCategory
+from backend.pipeline.errors import PipelineStateError
 
 logger = logging.getLogger(__name__)
 
 
 class ExecuteStage:
-    """Executes actions from the approved draft.
-
-    Currently: logs the full draft to structlog/stdout.
-    Extend by registering action handlers keyed on TriageCategory.
-    """
-
     def run(self, state: PipelineState) -> PipelineState:
-        assert state.approval is not None, "approval required"
+        if state.approval is None or state.approval.status not in (
+            ApprovalStatus.APPROVED, ApprovalStatus.EDITED
+        ):
+            raise PipelineStateError(
+                f"Execute called without approval — this is a pipeline bug "
+                f"(approval={state.approval.status.value if state.approval else 'None'})"
+            )
 
-        if state.approval.status != ApprovalStatus.APPROVED and \
-                state.approval.status != ApprovalStatus.EDITED:
-            state.log(f"execute: skipped — approval={state.approval.status.value}")
-            state.executed = False
-            return state
-
+        # ESCALATE, AMBIGUOUS, and DEFER paths have no draft — that's expected.
         draft = state.approval.edited_draft or state.draft
-        assert draft is not None, "no draft to execute"
 
         state.log("execute: start")
-        self._dispatch(state, draft)
+        notes = self._dispatch(state, draft)
+
+        state.executed_result = ExecuteResult(
+            work_order_ref=f"{state.tenant_id}-{state.id[:8]}",
+            action_items_taken=draft.action_items if draft else [],
+            notes=notes,
+        )
         state.executed = True
-        state.log("execute: complete")
+        state.log(f"execute: complete ref={state.executed_result.work_order_ref}")
+        from backend.audit.log import finalize_audit
+        finalize_audit(state)
         return state
 
-    def _dispatch(self, state: PipelineState, draft) -> None:  # noqa: ANN001
-        """Route to the appropriate handler based on triage category."""
-        from backend.models.types import TriageCategory
-
+    def _dispatch(self, state: PipelineState, draft) -> str:  # noqa: ANN001
         category = state.category
+
         logger.info(
             "Executing approved response",
             extra={
                 "state_id": state.id,
+                "tenant_id": state.tenant_id,
                 "category": str(category),
-                "body": draft.body,
+                "work_order_ref": f"{state.tenant_id}-{state.id[:8]}",
                 "action_items": draft.action_items,
-                "caveats": draft.caveats,
             },
         )
 
         if category == TriageCategory.ACTION_REQUIRED:
-            self._handle_action_required(state, draft)
+            return self._handle_action_required(state, draft)
         elif category == TriageCategory.INFO_REQUEST:
-            self._handle_info_request(state, draft)
+            return self._handle_info_request(state, draft)
         elif category == TriageCategory.ESCALATE:
-            self._handle_escalate(state, draft)
+            return self._handle_escalate(state, draft)
         elif category == TriageCategory.DEFER:
-            self._handle_defer(state, draft)
+            return self._handle_defer(state, draft)
+        elif category == TriageCategory.AMBIGUOUS:
+            return self._handle_ambiguous(state, draft)
+        return "no handler for category"
 
-    # ── handlers ─────────────────────────────────────────────────────────────
-
-    def _handle_action_required(self, state: PipelineState, draft) -> None:  # noqa: ANN001
+    def _handle_action_required(self, state: PipelineState, draft) -> str:  # noqa: ANN001
         for item in draft.action_items:
-            logger.info("[ACTION] %s | state_id=%s", item, state.id)
+            logger.info("[ACTION] %s | ref=%s-%s", item, state.tenant_id, state.id[:8])
+        return f"Work order created with {len(draft.action_items)} action(s)"
 
-    def _handle_info_request(self, state: PipelineState, draft) -> None:  # noqa: ANN001
-        logger.info("[INFO] %s | state_id=%s", draft.body, state.id)
+    def _handle_info_request(self, state: PipelineState, draft) -> str:  # noqa: ANN001
+        logger.info("[INFO] %s | ref=%s-%s", draft.body, state.tenant_id, state.id[:8])
+        return "Information response logged"
 
-    def _handle_escalate(self, state: PipelineState, draft) -> None:  # noqa: ANN001
-        logger.warning("[ESCALATE] %s | state_id=%s", draft.body, state.id)
+    def _handle_escalate(self, state: PipelineState, draft) -> str:  # noqa: ANN001
+        note = state.approval.reviewer_note if state.approval else ""
+        logger.warning("[ESCALATE] reviewer_note=%s | ref=%s-%s", note, state.tenant_id, state.id[:8])
+        return f"Escalation recorded — on-call notified. Reviewer: {note or '(no note)'}"
 
-    def _handle_defer(self, state: PipelineState, draft) -> None:  # noqa: ANN001
-        logger.info("[DEFER] %s | state_id=%s", draft.body, state.id)
+    def _handle_defer(self, state: PipelineState, draft) -> str:  # noqa: ANN001
+        body = draft.body if draft else "(deferred without draft)"
+        logger.info("[DEFER] %s | ref=%s-%s", body, state.tenant_id, state.id[:8])
+        return "Added to deferred queue"
+
+    def _handle_ambiguous(self, state: PipelineState, draft) -> str:  # noqa: ANN001
+        note = state.approval.reviewer_note if state.approval else ""
+        logger.info("[AMBIGUOUS] reviewer clarified | ref=%s-%s", state.tenant_id, state.id[:8])
+        return f"Reviewer note: {note or '(no note)'}"

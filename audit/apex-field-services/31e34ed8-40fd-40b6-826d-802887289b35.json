@@ -1,0 +1,133 @@
+{
+  "state_id": "31e34ed8-40fd-40b6-826d-802887289b35",
+  "tenant_id": "apex-field-services",
+  "created_at": "2026-09-24T10:34:53.224748",
+  "transcript": {
+    "session_id": "cli-test",
+    "text": "Customer calling about broken HVAC, need emergency tech Thursday",
+    "words": [],
+    "is_final": true,
+    "received_at": "2026-09-24T10:34:53.224695"
+  },
+  "parsed": {
+    "raw_text": "Customer calling about broken HVAC, need emergency tech Thursday",
+    "intent": "Request emergency HVAC technician visit on Thursday for a broken HVAC unit",
+    "entities": {
+      "equipment_type": "HVAC",
+      "issue": "broken",
+      "requested_service": "emergency technician",
+      "requested_date": "Thursday",
+      "urgency_requested": "emergency",
+      "contact_name": null,
+      "contact_phone": null,
+      "site_address": null,
+      "unit_location_details": null,
+      "time_window_on_requested_date": null,
+      "account_or_po_number": null,
+      "access_instructions": null,
+      "action_items": [
+        "Create work order: Emergency HVAC - broken unit \u2014 urgency: high",
+        "Assign technician to customer site (address required) for emergency HVAC repair",
+        "Confirm appointment with customer for Thursday (time window required)"
+      ]
+    },
+    "urgency": "high",
+    "evidence": {
+      "observed": [
+        "Customer called about broken HVAC",
+        "Customer requested an emergency technician on Thursday"
+      ],
+      "inferred": [
+        "interpretation: Customer is requesting an on-site service visit rather than a phone troubleshooting session",
+        "interpretation: 'Emergency' indicates expedited response is requested and higher-priority handling should be used",
+        "interpretation: Thursday refers to the next upcoming Thursday (scheduling should clarify the exact date)",
+        "interpretation: A work order should be created and a technician dispatched once site/contact details are obtained",
+        "interpretation: Emergency service rates or authorization may be required prior to dispatch"
+      ],
+      "unknown": [
+        "Exact site address or building name",
+        "Contact person name",
+        "Contact phone number or preferred callback number",
+        "Specific time window on Thursday (AM/PM or specific hours)",
+        "Which specific HVAC unit or location (roof unit, AHU number, suite/floor)",
+        "Whether issue is heating, cooling, or other failure mode",
+        "Contract/SLA details or account number",
+        "Authorization for emergency/after-hours charges",
+        "Any access instructions, gate codes, or point of contact on site",
+        "Preferred technician or tech qualifications (if any)"
+      ]
+    }
+  },
+  "category": "action_required",
+  "classify_reason": "User requests an urgent/emergency HVAC technician visit on Thursday for a broken unit, which requires scheduling and dispatching action.",
+  "context": [
+    {
+      "source": "ops-manual/emergency-response",
+      "content": "Emergency HVAC calls (no heat/no cool in extreme weather, gas leak, carbon monoxide) are classified Priority 1. Dispatch a technician within 2 hours. Notify the on-call supervisor immediately. Do not defer emergency calls.",
+      "relevance_score": 0.6002444922924042
+    },
+    {
+      "source": "ops-manual/emergency-response",
+      "content": "Carbon monoxide or gas leak: advise customer to evacuate immediately and call 911. Do not dispatch HVAC technician until fire department clears the site. Create an incident report and notify the safety officer.",
+      "relevance_score": 0.528603196144104
+    }
+  ],
+  "draft": {
+    "greeting": "Thank you \u2014 request received.",
+    "body": "I will treat this as an emergency HVAC request for Thursday. I will create a high\u2011urgency work order, prepare a Priority 1 dispatch for Thursday, and notify the on\u2011call supervisor immediately. Before I can assign and dispatch a technician I need the following details: site address/building, contact name and phone number for confirmation, a preferred time window on Thursday (AM/PM or specific hours), which specific HVAC unit/location (roof unit, AHU number, suite/floor), whether the failure is heating or cooling (or other), account/PO number or contract/SLA if applicable, authorization for emergency/after\u2011hours charges, and any access instructions or gate codes. If you suspect a gas leak or carbon monoxide, evacuate the building and call 911; we will not dispatch until emergency responders clear the site.",
+    "action_items": [
+      "Create work order: Emergency HVAC - broken unit \u2014 urgency: high",
+      "Prepare priority-1 dispatch for Thursday",
+      "Notify on-call supervisor immediately",
+      "Assign technician to customer site for emergency HVAC repair (site address required)",
+      "Confirm appointment with customer for Thursday (time window and contact phone required)"
+    ],
+    "closing": "Please provide the missing site and contact details now so we can complete dispatch.",
+    "caveats": [
+      "Exact site address or building name not provided",
+      "Contact person name not provided",
+      "Contact phone number or preferred callback number not provided",
+      "Specific time window on Thursday (AM/PM or specific hours) not provided",
+      "Which specific HVAC unit or location (roof unit, AHU number, suite/floor) not provided",
+      "Whether issue is heating, cooling, or other failure mode not provided",
+      "Contract/SLA details or account number not provided",
+      "Authorization for emergency/after-hours charges not provided",
+      "Any access instructions, gate codes, or point of contact on site not provided",
+      "Preferred technician or tech qualifications (if any) not provided"
+    ]
+  },
+  "evaluation": {
+    "addresses_intent": true,
+    "factually_grounded": false,
+    "tone_appropriate": false,
+    "issues_found": [
+      "\"I will treat this as an emergency HVAC request for Thursday.\" \u2014 This phrasing implies deferring the emergency to Thursday; the retrieved ops-manual mandates Priority 1 emergency HVAC calls be dispatched within 2 hours and not deferred, so treating it as an emergency 'for Thursday' is potentially incorrect or non-compliant.",
+      "\"prepare a Priority 1 dispatch for Thursday\" \u2014 Scheduling a Priority 1 dispatch specifically for Thursday contradicts the requirement to dispatch a technician within 2 hours for Priority 1 emergencies. The draft gives the impression of scheduling rather than immediate dispatch.",
+      "\"Before I can assign and dispatch a technician I need the following details: site address/building, contact name and phone number...\" \u2014 The ops-manual requires dispatch within 2 hours for Priority 1; saying you cannot assign/dispatch until these details are provided misrepresents the procedural requirement to initiate dispatch promptly and gather missing information in parallel when necessary.",
+      "\"If you suspect a gas leak or carbon monoxide, evacuate the building and call 911; we will not dispatch until emergency responders clear the site.\" \u2014 While evacuation and awaiting emergency responders is correct, the draft omits the ops-manual instruction to create an incident report and notify the safety officer for carbon monoxide or gas leak incidents, leaving out an actionable requirement.",
+      "Action item: 'Confirm appointment with customer for Thursday (time window and contact phone required)' \u2014 Framing the response as confirming an appointment for Thursday conflicts with the 'do not defer emergency calls' and 'dispatch within 2 hours' requirements. This could mislead staff to treat a Priority 1 as a scheduled appointment rather than an immediate dispatch.",
+      "Caveats list missing address/contact/time etc. \u2014 While accurate about missing caller-provided details, the draft does not state that dispatch should proceed immediately despite missing details (per ops-manual), which may leave the operator thinking dispatch must wait for all information."
+    ],
+    "overall": "NEEDS_EDIT"
+  },
+  "approval": {
+    "status": "approved",
+    "reviewer_note": "CLI auto-approve",
+    "edited_draft": null,
+    "decided_at": "2026-09-24T10:34:54.229400"
+  },
+  "audit_log": [
+    "[2026-09-24T10:34:53.265325] parse: start",
+    "[2026-09-24T10:35:04.031610] parse: intent='Request emergency HVAC technician visit on Thursday for a broken HVAC unit' urgency=high",
+    "[2026-09-24T10:35:04.034848] classify: start",
+    "[2026-09-24T10:35:06.075641] classify: category=action_required reason='User requests an urgent/emergency HVAC technician visit on Thursday for a broken unit, which requires scheduling and dispatching action.'",
+    "[2026-09-24T10:35:06.153486] research: start",
+    "[2026-09-24T10:35:06.310070] research: 2 items kept, 3 below threshold=0.5",
+    "[2026-09-24T10:35:06.312109] draft: start",
+    "[2026-09-24T10:35:24.297998] draft: 5 actions, 10 caveats",
+    "[2026-09-24T10:35:24.299977] evaluate: start",
+    "[2026-09-24T10:35:43.254414] evaluate: overall=NEEDS_EDIT issues=['\"I will treat this as an emergency HVAC request for Thursday.\" \u2014 This phrasing implies deferring the emergency to Thursday; the retrieved ops-manual mandates Priority 1 emergency HVAC calls be dispatched within 2 hours and not deferred, so treating it as an emergency \\'for Thursday\\' is potentially incorrect or non-compliant.', '\"prepare a Priority 1 dispatch for Thursday\" \u2014 Scheduling a Priority 1 dispatch specifically for Thursday contradicts the requirement to dispatch a technician within 2 hours for Priority 1 emergencies. The draft gives the impression of scheduling rather than immediate dispatch.', '\"Before I can assign and dispatch a technician I need the following details: site address/building, contact name and phone number...\" \u2014 The ops-manual requires dispatch within 2 hours for Priority 1; saying you cannot assign/dispatch until these details are provided misrepresents the procedural requirement to initiate dispatch promptly and gather missing information in parallel when necessary.', '\"If you suspect a gas leak or carbon monoxide, evacuate the building and call 911; we will not dispatch until emergency responders clear the site.\" \u2014 While evacuation and awaiting emergency responders is correct, the draft omits the ops-manual instruction to create an incident report and notify the safety officer for carbon monoxide or gas leak incidents, leaving out an actionable requirement.', \"Action item: 'Confirm appointment with customer for Thursday (time window and contact phone required)' \u2014 Framing the response as confirming an appointment for Thursday conflicts with the 'do not defer emergency calls' and 'dispatch within 2 hours' requirements. This could mislead staff to treat a Priority 1 as a scheduled appointment rather than an immediate dispatch.\", 'Caveats list missing address/contact/time etc. \u2014 While accurate about missing caller-provided details, the draft does not state that dispatch should proceed immediately despite missing details (per ops-manual), which may leave the operator thinking dispatch must wait for all information.']",
+    "[2026-09-24T10:35:43.255290] approve: waiting for human decision (category=TriageCategory.ACTION_REQUIRED, has_draft=True)",
+    "[2026-09-24T10:35:43.255340] approve: decision=approved"
+  ]
+}

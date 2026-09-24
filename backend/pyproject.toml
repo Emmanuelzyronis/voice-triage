@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "voice-triage"
+name = "arkops"
 version = "0.1.0"
-description = "Voice-supervised agentic pipeline with human approval gate"
+description = "ArkOps — voice-driven operational triage with human approval gate"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
@@ -23,6 +23,7 @@ dependencies = [
     "websockets>=13.0",
     "httpx>=0.27",
     "structlog>=24.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

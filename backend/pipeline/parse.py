@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 import logging
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
 
 from backend.config import settings
 from backend.models.types import Evidence, ParsedIntent, PipelineState
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM = """
+_BASE_SYSTEM = """
 You extract structured intent from a voice transcript.
 Return JSON only — no prose, no markdown fences.
 
@@ -40,19 +40,33 @@ class ParseStage:
             azure_endpoint=settings.azure_openai_endpoint,
             api_key=settings.azure_openai_api_key,
             azure_deployment=settings.azure_openai_deployment,
-            temperature=0,
+            api_version=settings.azure_openai_api_version,
         )
 
     def run(self, state: PipelineState) -> PipelineState:
         assert state.transcript is not None, "transcript required"
         state.log("parse: start")
 
+        system = _BASE_SYSTEM
+        if state.tenant and state.tenant.ai_instructions:
+            system = system.rstrip() + f"\n\nDomain context:\n{state.tenant.ai_instructions}"
+
         messages = [
-            SystemMessage(content=_SYSTEM),
+            SystemMessage(content=system),
             HumanMessage(content=state.transcript.text),
         ]
+
         response = self._llm.invoke(messages)
-        data = json.loads(response.content)
+        data: dict = {}
+        for attempt in range(2):
+            try:
+                data = json.loads(response.content)
+                break
+            except json.JSONDecodeError:
+                if attempt == 1:
+                    raise
+                logger.warning("parse: JSON decode error — retry 1/1")
+                response = self._llm.invoke(messages)
 
         state.parsed = ParsedIntent(
             raw_text=state.transcript.text,

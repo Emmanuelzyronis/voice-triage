@@ -1,0 +1,48 @@
+{
+  "state_id": "1c1f610a-41dc-442d-92b8-b39f36d01e28",
+  "tenant_id": "test-tenant",
+  "created_at": "2026-09-24T11:06:50.110690",
+  "transcript": {
+    "session_id": "t1",
+    "text": "test transcript",
+    "words": [],
+    "is_final": true,
+    "received_at": "2026-09-24T11:06:50.110709"
+  },
+  "parsed": null,
+  "category": "action_required",
+  "classify_reason": "",
+  "context": [],
+  "draft": {
+    "greeting": "",
+    "body": "We will send a tech.",
+    "action_items": [
+      "Dispatch technician"
+    ],
+    "closing": "",
+    "caveats": []
+  },
+  "evaluation": null,
+  "approval": {
+    "status": "edited",
+    "reviewer_note": "corrected body",
+    "edited_draft": {
+      "greeting": "",
+      "body": "Revised: we will send a tech at 2pm.",
+      "action_items": [],
+      "closing": "",
+      "caveats": []
+    },
+    "decided_at": "2026-09-24T11:06:50.160884"
+  },
+  "executed_result": {
+    "work_order_ref": "test-tenant-1c1f610a",
+    "action_items_taken": [],
+    "executed_at": "2026-09-24T11:06:50.161215",
+    "notes": "Work order created with 0 action(s)"
+  },
+  "audit_log": [
+    "[2026-09-24T11:06:50.110759] approve: waiting for human decision (category=TriageCategory.ACTION_REQUIRED, has_draft=True)",
+    "[2026-09-24T11:06:50.160909] approve: decision=edited"
+  ]
+}

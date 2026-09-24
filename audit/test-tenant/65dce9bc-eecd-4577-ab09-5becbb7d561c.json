@@ -1,0 +1,44 @@
+{
+  "state_id": "65dce9bc-eecd-4577-ab09-5becbb7d561c",
+  "tenant_id": "test-tenant",
+  "created_at": "2026-09-24T11:06:50.005712",
+  "transcript": {
+    "session_id": "t1",
+    "text": "test transcript",
+    "words": [],
+    "is_final": true,
+    "received_at": "2026-09-24T11:06:50.005729"
+  },
+  "parsed": null,
+  "category": "action_required",
+  "classify_reason": "",
+  "context": [],
+  "draft": {
+    "greeting": "",
+    "body": "We will send a tech.",
+    "action_items": [
+      "Dispatch technician"
+    ],
+    "closing": "",
+    "caveats": []
+  },
+  "evaluation": null,
+  "approval": {
+    "status": "approved",
+    "reviewer_note": "Looks good",
+    "edited_draft": null,
+    "decided_at": "2026-09-24T11:06:50.055936"
+  },
+  "executed_result": {
+    "work_order_ref": "test-tenant-65dce9bc",
+    "action_items_taken": [
+      "Dispatch technician"
+    ],
+    "executed_at": "2026-09-24T11:06:50.057447",
+    "notes": "Work order created with 1 action(s)"
+  },
+  "audit_log": [
+    "[2026-09-24T11:06:50.005811] approve: waiting for human decision (category=TriageCategory.ACTION_REQUIRED, has_draft=True)",
+    "[2026-09-24T11:06:50.055981] approve: decision=approved"
+  ]
+}

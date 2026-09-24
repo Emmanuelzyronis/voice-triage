@@ -1,0 +1,42 @@
+{
+  "state_id": "9eb665c9-d0c8-48bb-9a9b-0d6ca6e8cce7",
+  "tenant_id": "test-tenant",
+  "created_at": "2026-09-24T11:05:28.317451",
+  "transcript": {
+    "session_id": "t1",
+    "text": "test transcript",
+    "words": [],
+    "is_final": true,
+    "received_at": "2026-09-24T11:05:28.317462"
+  },
+  "parsed": null,
+  "category": "action_required",
+  "classify_reason": "",
+  "context": [],
+  "draft": {
+    "greeting": "",
+    "body": "We will send a tech.",
+    "action_items": [
+      "Dispatch technician"
+    ],
+    "closing": "",
+    "caveats": []
+  },
+  "evaluation": null,
+  "approval": {
+    "status": "edited",
+    "reviewer_note": "corrected body",
+    "edited_draft": {
+      "greeting": "",
+      "body": "Revised: we will send a tech at 2pm.",
+      "action_items": [],
+      "closing": "",
+      "caveats": []
+    },
+    "decided_at": "2026-09-24T11:05:28.367596"
+  },
+  "audit_log": [
+    "[2026-09-24T11:05:28.317492] approve: waiting for human decision (category=TriageCategory.ACTION_REQUIRED, has_draft=True)",
+    "[2026-09-24T11:05:28.367615] approve: decision=edited"
+  ]
+}

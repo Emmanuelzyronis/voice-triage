@@ -47,8 +47,11 @@ class ApproveStage:
 
     async def run(self, state: PipelineState) -> PipelineState:
         """Async — awaits human decision. Raises TimeoutError if no decision arrives."""
-        assert state.draft is not None, "draft required"
-        state.log("approve: waiting for human decision")
+        # ESCALATE and AMBIGUOUS paths reach approve without a draft — that is expected
+        state.log(
+            f"approve: waiting for human decision "
+            f"(category={state.category}, has_draft={state.draft is not None})"
+        )
 
         try:
             await asyncio.wait_for(self._event.wait(), timeout=self._timeout)
@@ -58,9 +61,16 @@ class ApproveStage:
                 status=ApprovalStatus.REJECTED,
                 reviewer_note=f"Auto-rejected: no decision within {self._timeout}s",
             )
+            from backend.audit.log import write_audit
+            write_audit(state)
             return state
 
         assert self._decision is not None
         state.approval = self._decision
         state.log(f"approve: decision={self._decision.status.value}")
+
+        # Write audit record atomically before Execute can begin
+        from backend.audit.log import write_audit
+        write_audit(state)
+
         return state

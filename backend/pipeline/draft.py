@@ -13,7 +13,7 @@ from backend.models.types import DraftSlots, PipelineState
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM = """
+_BASE_SYSTEM = """
 You are drafting a response to a voice request. Use the structured slots below.
 Return JSON only — no prose, no markdown fences.
 
@@ -29,7 +29,7 @@ Schema:
 Rules:
 - body must directly address the user's intent
 - action_items: only list items that WILL be executed, not suggestions
-- caveats: list anything you are uncertain about rather than hiding it
+- caveats: surface every unknown item from the evidence — never hide gaps
 - never invent facts not supported by the context provided
 """
 
@@ -40,12 +40,16 @@ class DraftStage:
             azure_endpoint=settings.azure_openai_endpoint,
             api_key=settings.azure_openai_api_key,
             azure_deployment=settings.azure_openai_deployment,
-            temperature=0.3,
+            api_version=settings.azure_openai_api_version,
         )
 
     def run(self, state: PipelineState) -> PipelineState:
         assert state.parsed is not None, "parsed intent required"
         state.log("draft: start")
+
+        system = _BASE_SYSTEM
+        if state.tenant and state.tenant.ai_instructions:
+            system = system.rstrip() + f"\n\nDomain context:\n{state.tenant.ai_instructions}"
 
         context_block = "\n".join(
             f"[{item.source}] {item.content}" for item in state.context
@@ -60,9 +64,19 @@ class DraftStage:
             f"Context:\n{context_block}"
         )
 
-        messages = [SystemMessage(content=_SYSTEM), HumanMessage(content=user_content)]
+        messages = [SystemMessage(content=system), HumanMessage(content=user_content)]
         response = self._llm.invoke(messages)
-        data = json.loads(response.content)
+
+        data: dict = {}
+        for attempt in range(2):
+            try:
+                data = json.loads(response.content)
+                break
+            except json.JSONDecodeError:
+                if attempt == 1:
+                    raise
+                logger.warning("draft: JSON decode error — retry 1/1")
+                response = self._llm.invoke(messages)
 
         state.draft = DraftSlots(
             greeting=data.get("greeting", ""),

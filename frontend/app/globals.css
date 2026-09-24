@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+/* ── Design tokens ──────────────────────────────────────────────────────────
+   Dark ops-console palette. Amber = operational status.
+   All utilities (bg-surface, text-accent, border-border-strong, etc.)
+   are generated from the @theme block below.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Backgrounds */
+  --color-bg:       #0A0D14;
+  --color-surface:  #111827;
+  --color-surface2: #1F2937;
+
+  /* Borders */
+  --color-border:        #1F2937;
+  --color-border-strong: #374151;
+
+  /* Text */
+  --color-text:       #F1F5F9;
+  --color-text-muted: #94A3B8;
+  --color-text-dim:   #475569;
+
+  /* Accent — amber: record button, active stage, CTA */
+  --color-accent:     #F59E0B;
+  --color-accent-dim: #78350F;
+
+  /* Status */
+  --color-green:     #10B981;
+  --color-green-dim: #064E3B;
+  --color-red:       #EF4444;
+  --color-red-dim:   #7F1D1D;
+  --color-blue:      #3B82F6;
+  --color-blue-dim:  #1E3A5F;
+
+  /* Short-name aliases so Tailwind utilities match component usage:
+     text-muted, text-dim, border-borderStrong, bg-accentDim, etc. */
+  --color-muted:       #94A3B8;
+  --color-dim:         #475569;
+  --color-borderStrong: #374151;
+  --color-accentDim:   #78350F;
+  --color-greenDim:    #064E3B;
+  --color-redDim:      #7F1D1D;
+  --color-blueDim:     #1E3A5F;
+
+  /* Typography */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+
+  /* Spacing / radius */
+  --radius-panel: 6px;
+  --radius-badge: 4px;
+  --radius-chip:  2px;
+}
+
+/* ── Motion ──────────────────────────────────────────────────────────────── */
+/* One purposeful entrance per major panel. Nothing decorative. */
+
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.animate-entrance {
+  animation: fade-slide-up 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade {
+  animation: fade-in 200ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-entrance, .animate-fade { animation: none; }
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: var(--color-bg); }
+::-webkit-scrollbar-thumb  { background: var(--color-border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-dim); }
+
+/* ── Component classes ───────────────────────────────────────────────────── */
+
+/* Panel — surface card with border */
+.panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-panel);
+  padding: 24px;
+}
+
+.panel-elevated {
+  background-color: var(--color-surface2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-panel);
+  padding: 24px;
+}
+
+/* Stage badge — mono pill for stage names */
+.stage-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--radius-badge);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  background-color: transparent;
+  text-transform: uppercase;
+}
+
+/* Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: var(--color-accent);
+  color: #0A0D14;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: var(--radius-badge);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.btn-primary:hover  { background-color: #D97706; }
+.btn-primary:active { background-color: #B45309; }
+.btn-primary:disabled {
+  background-color: var(--color-accent-dim);
+  color: var(--color-text-dim);
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: transparent;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-badge);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.btn-ghost:hover  { background-color: var(--color-surface2); color: var(--color-text); }
+.btn-ghost:active { background-color: var(--color-border); }
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: var(--color-red);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: var(--radius-badge);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.btn-danger:hover  { background-color: #DC2626; }
+.btn-danger:active { background-color: #B91C1C; }
+.btn-danger:disabled {
+  background-color: var(--color-red-dim);
+  cursor: not-allowed;
+}
