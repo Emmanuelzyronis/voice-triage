@@ -1,125 +1,181 @@
-# VoiceTriage Sprint Plan
+# ArkOps — Hackathon Sprint Plan (Phase 0)
 
 **Deadline: September 30, 2026 @ 11:00 AM EDT**
 **Today: September 24, 2026**
 **Days remaining: 6**
+**Goal: Prove the engine is real. Ship Phase 0.**
+
+The hackathon submission is Phase 0 of ArkOps — the core pipeline working for a
+single demo tenant in the field operations vertical. Everything we build here
+is production-intended code, not throwaway demo code.
 
 ---
 
-## Day 1 — September 24 · Scaffold + STT
+## Day 1 — Sep 24 · Engine Smoke Test
 
-**Goal:** AssemblyAI real-time transcription working, transcript appears in terminal.
+**Goal:** AssemblyAI STT confirmed working. Transcript appears in terminal.
 
 ### Tasks
-- [ ] `backend/` Python project: `pyproject.toml`, `requirements.txt`, `.venv`
-- [ ] `backend/stt/assemblyai.py` — `RealtimeTranscriber` setup, `on_data` + `on_final` callbacks
-- [ ] `backend/main.py` — FastAPI app skeleton + `/ws` WebSocket endpoint
-- [ ] `backend/pipeline/models.py` — Pydantic models for all stage I/O
-- [ ] Manual test: speak into mic → transcript prints to terminal
-- [ ] Confirm: `TranscriptResult` with `text`, `confidence`, `session_id` returned
+- [x] `backend/` Python project: `pyproject.toml`, venv
+- [x] `backend/models/types.py` — full type hierarchy (PipelineState, Evidence, DraftSlots, etc.)
+- [x] `backend/pipeline/listen.py` — RealtimeTranscriber, WebSocket + mic modes
+- [x] `backend/pipeline/parse.py` — ParseStage, AzureChatOpenAI, evidence taxonomy
+- [x] `backend/pipeline/classify.py` — ClassifyStage, TriageCategory
+- [x] `backend/pipeline/research.py` — ResearchStage, ChromaDB retrieval
+- [x] `backend/pipeline/draft.py` — DraftStage, DraftSlots structured output
+- [x] `backend/pipeline/evaluate.py` — EvaluateStage, adversarial self-review
+- [x] `backend/pipeline/approve.py` — ApproveStage, async human gate
+- [x] `backend/pipeline/execute.py` — ExecuteStage, dispatch on TriageCategory
+- [x] `backend/main.py` — FastAPI: WS /ws/audio, POST /approve/{id}, GET /health
+- [x] `backend/scripts/test_mic.py` — mic smoke test
+- [ ] **Run mic test** → confirm transcript prints to terminal
+- [ ] Fix any import / env errors that surface
 
-**Done when:** "Hello, schedule a meeting with the sales team for Thursday" spoken → clean transcript in terminal.
+**Done when:** "Customer calling about broken HVAC, need a tech Thursday" spoken → clean transcript in terminal.
 
 ---
 
-## Day 2 — September 25 · Parse + Classify + LangGraph skeleton
+## Day 2 — Sep 25 · Tenant Config + Pipeline Wired
 
-**Goal:** Full LangGraph graph defined end-to-end. Parse and Classify stages working.
+**Goal:** Pipeline runs end-to-end for the demo tenant. TenantConfig in every stage.
 
 ### Tasks
-- [ ] `backend/pipeline/graph.py` — LangGraph `StateGraph` with all 8 nodes defined
-- [ ] `backend/pipeline/stages/parse.py` — Intent + entity extraction via Azure OpenAI structured output
-- [ ] `backend/pipeline/stages/classify.py` — Triage classification (5 categories)
-- [ ] Wire: `TranscriptResult` → `ParseResult` → `ClassifyResult`
-- [ ] Unit test: 5 transcript examples → correct classification each
+- [ ] `backend/models/tenant.py` — TenantConfig Pydantic model
+  - `tenant_id`, `name`, `ai_instructions`, `approval_rules`, `allowed_categories`, `integrations`
+- [ ] `backend/config/tenant_demo.yaml` — Field operations demo tenant
+  - AI instructions: HVAC/field-service domain, work-order terminology
+  - Approval rules: `action_required → human_required`, `info_request → auto_approve`
+  - Integrations: webhook
+- [ ] Wire `tenant_id` into `PipelineState`
+- [ ] Inject `tenant.ai_instructions` into ParseStage and DraftStage system prompts
+- [ ] `backend/knowledge/seed_demo.py` — seed ChromaDB with 20–30 field-ops chunks
+  - Company FAQ, dispatch policies, service area, team directory, escalation rules
+- [ ] End-to-end test (terminal only, no frontend yet):
+  - Hardcode a transcript → run all 8 stages → print PipelineState to stdout
+- [ ] Confirm: `APPROVED` state required before ExecuteStage runs
 
-**Done when:** "Schedule a meeting" → `ACTION_REQUIRED`. "What's our Q3 revenue?" → `INFO_REQUEST`. "This is urgent, call the CEO now" → `ESCALATE`.
+**Done when:** Fixed transcript for field-ops scenario → full PipelineState JSON printed with non-null fields in every stage slot.
 
 ---
 
-## Day 3 — September 26 · Research + Draft
+## Day 3 — Sep 26 · Approval API + Audit Trail
 
-**Goal:** ChromaDB retrieval working. Structured draft produced with citations.
+**Goal:** Approval gate testable via curl. Audit log written to disk.
 
 ### Tasks
-- [ ] `backend/knowledge/store.py` — ChromaDB client, `add_documents()`, `search()`
-- [ ] `backend/knowledge/seed.py` — Seed a demo knowledge base (company policies, FAQs, team directory — 20–30 chunks)
-- [ ] `backend/pipeline/stages/research.py` — Query builder + retrieval + score filtering
-- [ ] `backend/pipeline/stages/draft.py` — Structured output: `summary`, `action_items[]`, `caveats[]`, `sources_used[]`
-- [ ] Verify: each `ActionItem` has a valid `source_chunk_id` referencing a real retrieved chunk
+- [ ] `backend/audit/log.py` — write PipelineState as atomic JSON to `audit/` directory
+  - File per run: `{state_id}.json`
+  - Written before Execute, not after
+- [ ] Test `POST /approve/{id}` via curl:
+  - `{"status": "approved"}` → pipeline completes
+  - `{"status": "rejected", "reviewer_note": "wrong customer"}` → pipeline ends, state logged
+  - `{"status": "edited", "edited_body": "..."}` → edited draft used
+- [ ] Test timeout: set `APPROVAL_TIMEOUT_SECONDS=10`, let it expire → auto-reject logged
+- [ ] `GET /state/{id}` returns full PipelineState JSON (confirm all fields serialise cleanly)
+- [ ] `GET /audit/{id}` endpoint to read a completed run's audit record
 
-**Done when:** "Schedule a meeting with the sales team" → draft with `action_items: [{description: "Create calendar invite for sales team", source_chunk_id: "chunk_42", requires_human: false}]`
+**Done when:** Three curl scenarios work. Audit JSON written and readable.
 
 ---
 
-## Day 4 — September 27 · Evaluate + Approve gate
+## Day 4 — Sep 27 · Next.js Frontend
 
-**Goal:** Adversarial self-review working. Approve gate structurally enforced.
+**Goal:** Full approval UI working in browser. End-to-end in the browser, not just terminal.
 
 ### Tasks
-- [ ] `backend/pipeline/stages/evaluate.py` — 4 criteria, adversarial prompt, structured `EvaluateResult`
-- [ ] Verify adversarial prompt produces different verdicts than a naive "is this good?" prompt
-- [ ] `backend/audit/log.py` — Immutable audit record writer (JSON, atomic write)
-- [ ] LangGraph edge: EVALUATE → APPROVE (hard dependency — cannot route to EXECUTE without approval state)
-- [ ] `backend/pipeline/stages/execute.py` — Stub that checks `approval_decision == "APPROVED"` before doing anything
-- [ ] Test: attempt to call execute without approval → raises `PipelineStateError`
+- [ ] `frontend/` — Next.js 15 + Tailwind + TypeScript
+  - `npm create next-app frontend --typescript --tailwind`
+- [ ] `MicCapture.tsx` — browser mic access, stream PCM to backend WebSocket, level meter
+- [ ] `LiveTranscript.tsx` — receives partial + final transcripts over WS, shows in real time
+- [ ] `PipelineStatus.tsx` — stage indicators: LISTEN / PARSE / CLASSIFY / ... lighting up
+- [ ] `ApprovalGate.tsx` — three panels:
+  - Left: original transcript + confidence
+  - Centre: evaluation verdict per criterion (PASS/FAIL)
+  - Right: draft (summary, action items, caveats)
+  - Buttons: APPROVE / EDIT+APPROVE / REJECT
+- [ ] Wire: APPROVE button → `POST /approve/{id}` → pipeline completes → show EXECUTED state
+- [ ] Minimal, clean — dark background, clear typography. Not polished, but readable in a demo video.
 
-**Done when:** Evaluation produces per-criterion PASS/FAIL. Executing without approval raises an error.
+**Done when:** Speak into browser mic → transcript appears → pipeline stages light up → approval UI renders → click APPROVE → EXECUTED state shown.
 
 ---
 
-## Day 5 — September 28 · Frontend
+## Day 5 — Sep 28 · Integration Testing + Demo Prep
 
-**Goal:** Full UI: mic button → live transcript → pipeline stages → approval UI.
+**Goal:** Three scenarios recorded cleanly. Slide deck done.
 
 ### Tasks
-- [ ] `frontend/` — Next.js 15 + Tailwind + TypeScript scaffold
-- [ ] `MicCapture.tsx` — Browser mic access, stream audio to backend WebSocket, level meter
-- [ ] `LiveTranscript.tsx` — Receives partial + final transcripts over WebSocket, displays in real time
-- [ ] `PipelineStatus.tsx` — Shows current stage (LISTEN / PARSE / CLASSIFY / ...) with progress indicator
-- [ ] `DraftReview.tsx` — Renders `DraftResult`: summary, action items with source tooltips, caveats
-- [ ] `ApprovalGate.tsx` — Three panels: transcript | evaluation verdict | draft. APPROVE / EDIT / REJECT buttons
-- [ ] Wire frontend ↔ backend: full flow from mic to approval decision returned
+- [ ] **Scenario 1 (main):** "Customer calling about broken HVAC, need emergency tech Thursday, been waiting 3 days"
+  - Classify: ACTION_REQUIRED
+  - Draft: work order, urgency HIGH, escalation recommended
+  - Approve → Execute
+- [ ] **Scenario 2 (info request):** "What's our service area for commercial HVAC?"
+  - Classify: INFO_REQUEST
+  - Draft: pulls knowledge base answer
+  - Auto-approve (per tenant approval rule) → Execute immediately
+- [ ] **Scenario 3 (ambiguous):** "Send the thing to that customer from earlier"
+  - Classify: DEFER or AMBIGUOUS
+  - Draft surfaces unknowns: "referent unclear — which customer, which document?"
+  - Approve UI shows human what's missing
+- [ ] `docs/PITCH.md` — platform vision doc for submission
+  - Problem / Engine / Multi-tenant vision / Expansion path / Why ArkOps wins
+- [ ] Slide deck (5 slides: Problem / Engine / Demo / Platform Vision / Try It)
+- [ ] Verify: MIT LICENSE, `.env.example` present, no secrets in git
 
-**Done when:** Speak into mic in browser → see transcript appear → pipeline stages light up → approval UI renders → click APPROVE → see "EXECUTING" state.
+**Done when:** All three scenarios run cleanly. Slides drafted.
 
 ---
 
-## Day 6 — September 29 · Integration + Demo
+## Day 6 — Sep 29 · Record + Submit Prep
 
-**Goal:** Polished, bug-free, demo recorded.
+**Goal:** Video recorded. Everything ready to submit by morning.
 
 ### Tasks
-- [ ] End-to-end test: 3 different voice inputs, all 8 stages complete correctly
-- [ ] Edge case: low-confidence transcript → caveat surfaced in draft
-- [ ] Edge case: AMBIGUOUS classification → pipeline pauses, asks for clarification
-- [ ] Edge case: Evaluate returns FAIL → reviewer sees specific failure reason
 - [ ] Record demo video — follow `docs/DEMO_SCRIPT.md` exactly (target: 3 minutes)
-- [ ] Prepare slide deck (5 slides: Problem / Pipeline / Demo / Why It Wins / Try It)
-- [ ] Check: MIT LICENSE in repo, `.env.example` present, no secrets committed
-- [ ] Final `git push` — verify GitHub repo looks clean
-
-**Done when:** Video recorded, slides done, repo clean and public.
+- [ ] Upload video (YouTube unlisted)
+- [ ] Final `git push` — repo public, clean, README accurate
+- [ ] lablab.ai submission form:
+  - Project name: ArkOps
+  - Repo: `https://github.com/Emmanuelzyronis/voice-triage`
+  - Video URL
+  - Team: Zyronis
+- [ ] **Fill form by 10:00 PM — submit by 10:30 PM** (not morning — don't risk it)
 
 ---
 
-## Day 7 — September 30 · SUBMIT
+## Day 7 — Sep 30 · SUBMIT
 
-**Deadline: 11:00 AM EDT — do not leave this until morning**
+**Deadline: 11:00 AM EDT — form must be submitted**
 
-### Submission checklist (complete night before)
-- [ ] Video uploaded (YouTube unlisted or direct upload to lablab.ai)
-- [ ] Slides uploaded
-- [ ] GitHub repo URL ready: `https://github.com/Emmanuelzyronis/voice-triage`
-- [ ] lablab.ai submission form at `lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon`
-- [ ] **Submit form by 10:30 AM EDT** (30-minute buffer for any issues)
+- [ ] Confirm submission received on lablab.ai
+- [ ] Done
 
 ---
 
 ## Contingency
 
-If Day 5 (frontend) takes longer than planned, cut scope to:
-- Static approval UI (no live transcript display) — still shows the pipeline result
-- WebSocket partial transcript display is a nice-to-have, not a requirement for the pipeline to work
+If Day 4 (frontend) takes longer than planned:
+- Cut live transcript display — show the final transcript only (static, not streaming)
+- The approval gate (three panels + buttons) is non-negotiable for the demo
+- The pipeline correctness is the differentiator — don't let frontend polish block submission
 
-The pipeline correctness (stages 1–8, audit trail, approval gate) is the differentiator. The frontend is the presentation layer. Don't let the frontend block the submission.
+If Day 5 scenarios reveal pipeline bugs:
+- Fix the bug, not the test
+- If a stage consistently fails on voice input, add a retry (max 2) before surfacing to human
+
+---
+
+## What Phase 0 Proves
+
+That the engine is real. Specifically:
+
+1. AssemblyAI real-time STT works and produces clean final transcripts
+2. Parse extracts structured intent with explicit uncertainty (the evidence taxonomy)
+3. Classify routes correctly for multiple input types
+4. Draft produces slot-based output — not free prose — grounded in retrieved context
+5. Evaluate reviews adversarially before the human sees anything
+6. The approval gate cannot be bypassed in code
+7. Audit trail is written before execution
+
+Phase 1 (post-hackathon) adds: persistent DB, real phone numbers, Twilio, tenant onboarding, billing.
+The code written here is Phase 1's foundation, not throwaway demo code.

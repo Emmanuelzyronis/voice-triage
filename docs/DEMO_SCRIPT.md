@@ -1,130 +1,220 @@
-# VoiceTriage Demo Script
+# ArkOps — Demo Script
 
 **Target duration: 3 minutes**
-**Format:** Screen recording with voiceover. Show the browser + terminal side by side.
+**Format:** Screen recording with voiceover. Browser + terminal side by side.
+**Demo tenant:** Apex Field Services (HVAC / plumbing / field operations)
+
+The demo shows the engine. The pitch explains the platform.
+Hook judges with the working product, close with the expansion vision.
 
 ---
 
 ## Setup before recording
-- Knowledge base seeded with: company FAQ, team directory, meeting policies
+
+- Demo tenant seeded: Apex Field Services knowledge base (FAQ, dispatch policies, team directory)
 - Browser open at `localhost:3000`
-- Terminal visible showing backend logs (filter to pipeline stage transitions only)
-- Mic tested, quiet room
+- Terminal visible — backend logs filtered to stage transitions only (no noise)
+- Three browser tabs ready: main UI, audit JSON viewer, tenant config YAML
+- Mic tested, quiet room, no background noise
+- Run one full test pass before recording — confirm all 8 stages complete
 
 ---
 
 ## Script
 
-### 0:00–0:20 — Hook (voiceover only, no action yet)
+### 0:00–0:20 — Hook (voiceover only)
 
-> "Most voice agents are voice chatbots — microphone in, language model out. VoiceTriage is different. It's an 8-stage pipeline where voice is just the input. Every response goes through structured drafting, adversarial self-review, and a human approval gate before anything happens. Nothing is actioned without a human decision. Let me show you."
+> "Most voice AI products make one of two mistakes. Either they just transcribe and
+> stop — the human still does all the work. Or they act autonomously — no accountability
+> when they're wrong. ArkOps takes the middle position: the AI does the thinking, the
+> human makes the decision, the system enforces the rule. Let me show you."
 
----
-
-### 0:20–0:45 — Live transcript (AssemblyAI)
-
-**Action:** Click the microphone button. Speak clearly:
-
-> "I need to schedule an urgent meeting with the sales team and the engineering leads for this Thursday to discuss the Q3 product roadmap."
-
-**What to show on screen:**
-- Words appearing in real time in the `LiveTranscript` panel as you speak — highlight this
-- After you stop: the final punctuated transcript appears
-- Stage indicator: LISTEN → PARSE (animates)
-
-**Voiceover:**
-> "AssemblyAI's real-time streaming STT picks up the speech and shows it word by word. When I stop talking, it delivers the final punctuated transcript and the pipeline starts."
+No action on screen yet. Title card: **ArkOps** — *AI that turns operational conversations into approved work.*
 
 ---
 
-### 0:45–1:10 — Pipeline stages
+### 0:20–0:50 — Live transcript (AssemblyAI)
 
-**Action:** No interaction — pipeline runs automatically.
+**Action:** Click the mic button. Speak clearly and at a normal pace:
 
-**What to show on screen:**
-- Stage indicators lighting up: PARSE → CLASSIFY → RESEARCH → DRAFT → EVALUATE
-- Each stage takes 1–2 seconds — show them animating through
-- Zoom in on CLASSIFY showing: `ACTION_REQUIRED — "Scheduling request with named participants and urgency"` 
+> "Hi, this is Marcus from building 4B. Our HVAC unit stopped working completely —
+> it's been out since yesterday and it's 91 degrees in here. I need an emergency
+> technician today or first thing Thursday at the latest."
+
+**What to show:**
+- Words appearing word-by-word in the LiveTranscript panel as you speak
+- Pause at the end — show the final punctuated transcript appear
+- Stage indicator animates: **LISTEN** ✓ → **PARSE** (spinning)
 
 **Voiceover:**
-> "Parse extracts the intent, participants, urgency. Classify routes it: this is an action required, not just a question. Research pulls the relevant context from our knowledge base — meeting room policies, team calendars, the Q3 roadmap brief. Draft produces structured output — not a paragraph, but named slots: summary, action items, each with a source citation."
+> "AssemblyAI's real-time streaming STT picks up every word as it's spoken.
+> When the caller stops, it delivers the final punctuated transcript and
+> the pipeline starts automatically."
 
 ---
 
-### 1:10–1:40 — Evaluation verdict
+### 0:50–1:20 — Pipeline stages
 
-**Action:** Let the Evaluate stage complete. Zoom in on the evaluation panel.
+**Action:** No interaction — pipeline runs. Let stages animate through.
 
-**What to show on screen:**
-- EvaluateResult panel with per-criterion breakdown:
-  - Intent addressed: PASS
-  - Factual grounding: PASS — "All action items cite a retrieved context chunk"
-  - No overreach: PASS
-  - Tone: PASS
-- Overall: `PASS`
+**What to show:**
+- **PARSE** completes → zoom in briefly:
+  - Intent: "Emergency HVAC repair request, building 4B"
+  - Urgency: HIGH
+  - Observed: ["HVAC unit non-functional since yesterday", "temperature 91°F", "caller in building 4B"]
+  - Unknown: ["exact unit model", "lease agreement status", "preferred technician"]
+- **CLASSIFY** → `ACTION_REQUIRED — "Emergency service request with named location and urgency"`
+- **RESEARCH** → pulled 3 context chunks: dispatch policy, emergency escalation rules, service area map
+- **DRAFT** → animates complete
+- **EVALUATE** → animates complete
 
 **Voiceover:**
-> "Before the human sees anything, the pipeline evaluates its own draft — adversarially. It's asked to find three reasons the draft might be wrong, then check each criterion. Only then does it reach the human."
+> "Parse extracts intent, urgency, and — importantly — what the system knows for certain
+> versus what it's inferring. Classify routes it: this is action required, not just a question.
+> Research pulls the relevant context from Apex's knowledge base — dispatch policies,
+> service area, escalation rules. Draft produces structured output: not a paragraph, but
+> named slots. And before the human sees anything, the pipeline evaluates its own draft."
 
 ---
 
-### 1:40–2:10 — Approval gate
+### 1:20–1:45 — Evaluation verdict
 
-**Action:** Show the approval UI in full. Slowly pan across all three panels.
+**Action:** Zoom in on the Evaluation panel.
 
-**What to show on screen:**
-- Panel 1: Original transcript
-- Panel 2: Evaluation verdict (all PASS, per-criterion)
-- Panel 3: Draft — summary, action items (e.g., "Create calendar invite — Thu Oct 1, Sales Team + Eng Leads"), caveats ("Thursday availability not confirmed"), sources cited inline
+**What to show:**
+```
+✓ Intent addressed       PASS — "Work order drafted matching caller's request"
+✓ Factually grounded     PASS — "All action items cite retrieved dispatch policy"
+✓ Tone appropriate       PASS — "Urgency level reflected in draft"
+  Issues found:          None
+  Overall:               PASS
+```
 
 **Voiceover:**
-> "The approval gate shows everything at once — the original words, the evaluation verdict, and the draft side by side. The human can approve it as-is, edit the draft and then approve, or reject with a reason. There is no button that bypasses this. The pipeline graph doesn't have a path to Execute without an Approved state."
+> "The evaluator is prompted adversarially — it's asked to find three reasons
+> the draft might be wrong before it assesses each criterion. Only when it passes
+> does the approval gate open. The human doesn't see unreviewed output."
 
 ---
 
-### 2:10–2:30 — Click approve + audit trail
+### 1:45–2:20 — Approval gate
 
-**Action:** Click APPROVE. Show execute state. Then open the audit trail JSON briefly.
+**Action:** Show the full approval UI. Pan slowly across all three panels.
 
-**What to show on screen:**
-- EXECUTING state → COMPLETE
-- Open `audit/` folder in terminal: `cat latest.json` — show the full record (transcript, parse, classify, research chunks, draft, eval verdict, approval timestamp)
+**What to show:**
+
+Panel 1 (left) — **Original Transcript:**
+```
+"Hi, this is Marcus from building 4B. Our HVAC unit stopped working completely —
+it's been out since yesterday and it's 91 degrees in here. I need an emergency
+technician today or first thing Thursday at the latest."
+Session: aai_8d2f91 · AssemblyAI confidence: 0.96
+```
+
+Panel 2 (centre) — **Evaluation Verdict:**
+```
+✓ Intent addressed   ✓ Factually grounded   ✓ Tone appropriate
+Issues: None · Overall: PASS
+```
+
+Panel 3 (right) — **Draft:**
+```
+Body: Emergency HVAC repair request for unit in Building 4B.
+      Caller reports complete failure since yesterday. Temp: 91°F. HIGH urgency.
+
+Action items:
+  · Create emergency work order — Building 4B HVAC unit
+  · Assign available technician for today or Thursday AM
+  · Notify building manager of service window
+
+Caveats:
+  · Unit model unknown — technician should inspect on arrival
+  · Thursday availability not confirmed with dispatch
+```
 
 **Voiceover:**
-> "Approved — the calendar invite is queued. The audit trail is written before execution: every decision, every retrieved chunk, the evaluation verdict, who approved it and when. If anything is ever questioned, the record is there."
+> "The approval gate shows everything at once — the caller's exact words, the
+> evaluation verdict, and the draft side by side. The dispatcher can approve it
+> as-is, edit the draft before approving, or reject with a reason. There is no
+> button that bypasses this. The pipeline doesn't have a path to Execute without
+> an Approved state."
 
 ---
 
-### 2:30–2:50 — Rejection case (optional if time allows)
+### 2:20–2:40 — Approve + Audit trail
 
-**Action:** Run a second example. Speak something ambiguous:
+**Action:** Click APPROVE. Then switch to the audit tab.
 
-> "Send that thing we discussed to the team."
-
-**What to show on screen:**
-- Classify: `AMBIGUOUS — "Referent 'that thing' cannot be resolved from transcript"`
-- Pipeline halts at Approve with a clarification request
-- Human sees: "I couldn't determine what to send. Can you be more specific?"
+**What to show:**
+- EXECUTING state → COMPLETE ✓
+- Switch to terminal: `cat audit/demo-fieldops/{state_id}.json` — show the full record briefly
+  (don't read it — just show it exists and is structured)
 
 **Voiceover:**
-> "When the intent can't be resolved, VoiceTriage surfaces the ambiguity rather than guessing. AMBIGUOUS is a first-class outcome — the human is asked to clarify, not presented with a confident wrong answer."
+> "Approved. The work order is queued. The audit trail is written before execution —
+> every decision in that run: the caller's words, what was retrieved, the evaluation
+> verdict, who approved it and when. If anything is ever disputed, the record is there."
 
 ---
 
-### 2:50–3:00 — Close
+### 2:40–2:55 — Tenant config (15 seconds)
+
+**Action:** Switch to the third tab — `tenant_demo.yaml`
+
+**What to show:**
+```yaml
+tenant_id: demo-fieldops
+name: Apex Field Services
+ai_instructions: |
+  This is a field operations company handling HVAC, plumbing, and electrical.
+  Callers report equipment failures, request service visits, or ask about scheduling.
+approval_rules:
+  action_required: human_required
+  escalate: human_required
+  info_request: auto_approve
+  defer: auto_approve
+integrations:
+  - webhook
+```
 
 **Voiceover:**
-> "VoiceTriage. AssemblyAI for the voice layer. LangGraph for the pipeline. Structured output so every stage is auditable. An adversarial self-review so the human sees what matters. And an approval gate that cannot be bypassed. Voice as input to a system that earns trust."
+> "This is Apex Field Services — one tenant config. The same engine, a different YAML,
+> serves a property management company, an insurance intake team, or a legal practice.
+> The pipeline is shared. The vertical is configuration."
 
-**What to show on screen:**
+---
+
+### 2:55–3:00 — Close
+
+**Voiceover:**
+> "ArkOps. AI that turns operational conversations into approved work.
+> AssemblyAI for the voice layer. Human approval enforced in code, not convention.
+> And a multi-tenant engine that scales across every industry that runs on inbound calls."
+
+**What to show:**
 - GitHub repo: `github.com/Emmanuelzyronis/voice-triage`
-- lablab.ai submission link
+- Title card: **ArkOps** — phase 0 of the platform
 
 ---
 
 ## Recording notes
-- Keep terminal font large (18pt minimum) — readable at 1080p
-- Pipeline stage animations should be visible — don't rush through them
-- The approval gate scene is the most important: spend time showing all three panels
-- No background music — voice clarity matters for a voice agent demo
-- Export at 1080p minimum, keep under 5 minutes including any intro title card
+
+- Terminal font: 18pt minimum — readable at 1080p
+- Keep pipeline stage animations on screen long enough to read the stage name
+- The approval gate scene (1:45–2:20) is the most important — spend time on all three panels
+- The tenant config reveal (2:40–2:55) is the expansion argument — don't rush it
+- No background music — this is a voice agent demo, silence is correct
+- Export at 1080p, target 3:00, hard cap 3:30
+- Upload unlisted to YouTube before Sep 29, have the URL ready
+
+---
+
+## Fallback (if pipeline isn't fully wired by Day 6)
+
+If the live mic-to-browser flow isn't working:
+1. Pre-record the terminal output (python test_mic with a saved audio file)
+2. Show the approval UI with a pre-loaded state (hardcoded JSON)
+3. Demo the approval → execute → audit trail flow manually
+
+The approval gate and audit trail are the differentiator — those must be shown,
+even if the live STT isn't wired to the browser yet.

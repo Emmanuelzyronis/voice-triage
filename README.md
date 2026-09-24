@@ -1,214 +1,290 @@
-# VoiceTriage
+# ArkOps
 
-> **AssemblyAI Voice Agent Hackathon 2026** · lablab.ai · MIT License
-
-**Voice-supervised agentic pipeline with human approval — not another voice chatbot.**
+> **AI that turns operational conversations into approved work.**
 
 [![AssemblyAI Hackathon 2026](https://img.shields.io/badge/AssemblyAI-Hackathon%202026-00bcd4?style=flat-square)](https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon)
-[![lablab.ai](https://img.shields.io/badge/lablab.ai-platform-7c3aed?style=flat-square)](https://lablab.ai)
+[![lablab.ai](https://img.shields.io/badge/lablab.ai-Zyronis%20Team-7c3aed?style=flat-square)](https://lablab.ai)
 [![MIT License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](./LICENSE)
 [![Deadline](https://img.shields.io/badge/deadline-Sep%2030%202026-red?style=flat-square)]()
 
 ---
 
-## ⚡ Sprint Plan (Sep 24–30)
+## What ArkOps Is
 
-| Day | Date | Goal |
-|-----|------|------|
-| 1 | Sep 24 | Scaffold backend + AssemblyAI real-time STT streaming to console |
-| 2 | Sep 25 | Parse + Classify stages; LangGraph pipeline skeleton wired end-to-end |
-| 3 | Sep 26 | Research stage (ChromaDB retrieval) + Draft stage (structured output slots) |
-| 4 | Sep 27 | Evaluate (adversarial self-review) + Approve gate enforced in code |
-| 5 | Sep 28 | Next.js frontend — mic capture, WebSocket live transcript, approval UI |
-| 6 | Sep 29 | Integration testing, demo polish, record video |
-| 7 | **Sep 30** | **Submit by 11:00 AM EDT** — video, slides, repo, lablab.ai form |
+ArkOps is a **multi-tenant AI operations layer** that converts inbound conversations — starting with voice and phone — into structured, human-approved actions inside each tenant's own systems.
 
----
+Every tenant configures their own:
 
-## What VoiceTriage Is
+| Tenant owns | Examples |
+|---|---|
+| Phone numbers / channels | Inbound call lines, voicemail boxes |
+| Users and roles | Dispatcher, manager, admin |
+| Customers / contacts | Their client records |
+| AI instructions | Domain-specific system prompts |
+| Workflows | What happens after each triage category |
+| Approval rules | Who must approve what, and when |
+| Integrations | Webhooks, email, calendar, CRM, ticketing |
+| Records | Per-tenant knowledge base |
+| Audit history | Every decision, immutable |
 
-Most voice agent hackathon submissions are: microphone → STT → LLM → speaker. VoiceTriage is different.
-
-VoiceTriage treats voice as the **input to a proper agentic pipeline** — one with structured output contracts, an adversarial self-review step, and a human approval gate that cannot be bypassed in code. Nothing is actioned without a human decision. The pipeline is correct by construction, not by hoping the model behaves.
-
-**The core insight:** the problem with voice automation isn't the STT quality. It's that downstream processing is either a chatbot (no memory, no structure, no accountability) or fully autonomous (no human in the loop, errors go undetected). VoiceTriage is neither.
-
----
-
-## 8-Stage Pipeline
+The shared engine does:
 
 ```
-┌─────────────┐
-│   LISTEN    │  AssemblyAI real-time streaming STT
-│             │  Microphone → transcript chunks → final transcript
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│    PARSE    │  Extract intent, entities, urgency from transcript
-│             │  Output: structured ParseResult (not free text)
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  CLASSIFY   │  Triage into: ACTION_REQUIRED / INFO_REQUEST /
-│             │  ESCALATE / DEFER / AMBIGUOUS
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  RESEARCH   │  ChromaDB semantic search on knowledge base
-│             │  Returns: ranked context chunks with source refs
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│    DRAFT    │  Structured output slots — model fills defined fields:
-│             │  summary / action_items / caveats / confidence
-│             │  (NOT free prose — makes Evaluate tractable)
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  EVALUATE   │  Adversarial self-review before human sees anything
-│             │  Checks: intent addressed? claims grounded? tone right?
-│             │  Verdict: PASS / FAIL per criterion (structured)
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│   APPROVE   │  Human sees: transcript + evaluation verdict + draft
-│             │  Options: APPROVE / EDIT+APPROVE / REJECT+REASON
-│             │  Gate enforced structurally — no code path bypasses it
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│   EXECUTE   │  Carry out the approved action
-│             │  Full audit trail written before execution
-└─────────────┘
+Call / voicemail
+     ↓
+ Transcription          ← AssemblyAI real-time STT
+     ↓
+ Extract intent         ← Structured parse with evidence taxonomy
+     ↓
+ Draft action           ← Slot-based output (not free prose)
+     ↓
+ Surface unknowns       ← observed / inferred / unknown — explicit
+     ↓
+ Human approval         ← Gate enforced in code, not convention
+     ↓
+ Execute                ← Into tenant's system, full audit trail
 ```
+
+The voice input is one channel. The valuable asset is the **workflow / approval / audit infrastructure underneath** — vertical-specific behaviour becomes configuration, not code.
 
 ---
 
-## Why Each Stage Matters
+## Why ArkOps, not "an AI receptionist"
 
-**LISTEN (AssemblyAI):** Real-time streaming — users see their words appear as they speak. Final transcript is punctuated and formatted. No polling, no wait time.
+A receptionist is a single-purpose product. ArkOps is infrastructure.
 
-**PARSE:** Voice input is messy. "Uh, I need to, like, schedule a meeting with the sales team for next week, maybe Thursday?" needs to become `{intent: SCHEDULE_MEETING, participants: [sales_team], date_hint: "next Thursday", urgency: LOW}`. This structure is what makes every downstream stage fast and auditable.
+The same engine, different tenant config, serves:
 
-**CLASSIFY:** Routes to the right pipeline variant. An INFO_REQUEST doesn't need an approval gate the same way an ACTION_REQUIRED does. Classification is the branching decision.
+| Vertical | The conversation | The action |
+|---|---|---|
+| **Field operations** | Customer calls about broken HVAC | Work order created → dispatcher approves → assigned |
+| **Property management** | Tenant calls about maintenance | Ticket raised → landlord approves → contractor notified |
+| **Insurance intake** | Claimant reports an incident | Claim record drafted → adjuster approves → assigned |
+| **Legal intake** | Client describes a situation | Matter summary drafted → lawyer approves → filed |
+| **Healthcare admin** | Patient calls about symptoms | Triage notes drafted → nurse approves → records updated |
+| **Logistics** | Driver reports a delivery issue | Exception logged → ops approves → re-routed |
 
-**RESEARCH:** Pulls relevant knowledge before drafting. The draft model is grounded in retrieved context — it cannot hallucinate facts that don't appear in the knowledge base, and the Evaluate stage can check this.
-
-**DRAFT (structured output):** The model fills slots, not blank paper. `summary`, `action_items[]`, `caveats[]`, `confidence` (0–1), `sources[]`. Structured output is not a style choice — it's what makes the Evaluate step possible. You cannot reliably check free prose for factual grounding. You can check whether each action item has a source citation.
-
-**EVALUATE (adversarial):** The prompt is adversarial — it does not ask "is this good?" It asks "find three reasons this draft might be wrong, then assess whether any of them actually apply." Structured verdict per criterion. The human reviewer sees the specific failure, not a vague warning.
-
-**APPROVE (gate):** The approval UI shows: the original transcript, the evaluation verdict (per-criterion breakdown), and the draft side by side. The human can approve, edit before approving, or reject with a reason. A rejection is logged. There is no button that sends or actions anything before reaching APPROVED state. This is the engineering position, not a UX preference.
-
-**EXECUTE:** Approved actions are executed with a full audit trail — transcript, parse result, classification, retrieved context, draft, evaluation verdict, approval decision, execution timestamp — written atomically before execution.
+Vertical-specific behaviour (terminology, approval rules, integrations) lives in tenant config. The pipeline, evidence taxonomy, approval gate, and audit trail are shared across all of them.
 
 ---
 
-## How AssemblyAI Is Used
+## The Core Differentiator
 
-AssemblyAI is the mandatory core of the LISTEN stage:
+Most voice AI products make one of two mistakes:
 
-- **Real-time streaming STT** via `assemblyai.RealtimeTranscriber`
-- Partial transcripts stream to the frontend over WebSocket as the user speaks
-- Final punctuated transcript triggers the pipeline
-- Speaker diarization enabled where applicable
-- AssemblyAI handles: noise, accents, filler words, punctuation restoration
+1. **Too passive** — transcribe, stop. Human still does all the work.
+2. **Too autonomous** — LLM decides and acts. No accountability when it's wrong.
 
-```python
-import assemblyai as aai
+ArkOps takes the middle position: **the AI does the thinking, the human makes the decision, the system enforces the rule.** 
 
-aai.settings.api_key = ASSEMBLYAI_API_KEY
+The approval gate is not a UI pattern — it is the graph topology. There is no code path from DRAFT to EXECUTE without an `APPROVED` state on the `PipelineState` object. This is the engineering position, not a feature flag.
 
-transcriber = aai.RealtimeTranscriber(
-    sample_rate=16_000,
-    on_data=on_transcript_data,   # streams partials to UI
-    on_final=on_transcript_final, # triggers pipeline
-    on_error=on_error,
-)
+The evidence taxonomy (`observed / inferred / unknown`) is the other pillar. The model surfaces what it knows, what it is guessing, and what it cannot determine — and these travel through every stage. The human approves knowing exactly what the AI is uncertain about. Unknown items are never collapsed into false confidence.
+
+---
+
+## Product Phases
+
+### Phase 0 — Engine (Hackathon · Sep 30, 2026)
+
+The core pipeline working for a single demo tenant in the field operations vertical.
+
+**What's built:**
+- 8-stage pipeline: Listen → Parse → Classify → Research → Draft → Evaluate → Approve → Execute
+- AssemblyAI real-time STT (WebSocket + mic modes)
+- ChromaDB knowledge base per tenant
+- Adversarial self-review before human sees anything
+- Human approval gate, structurally enforced
+- Immutable audit log on every pipeline run
+- FastAPI backend + Next.js approval UI
+
+**Deliverable:** Working demo. AssemblyAI hackathon submission. Proof the engine is real.
+
+---
+
+### Phase 1 — Single-Tenant MVP
+
+One paying customer. Full product, not a demo.
+
+**What gets added:**
+- Tenant configuration (YAML file → UI form)
+  - AI instructions, approval rules, allowed categories, integrations
+- Phone number provisioning (Twilio integration)
+- Voicemail ingestion (async pipeline, not just real-time)
+- Persistent audit database (PostgreSQL, not JSON files)
+- Webhook integration (push approved actions to any endpoint)
+- Email notification on approval required
+- Simple approval UI hosted (not localhost)
+- Auth (single user, Clerk or simple JWT)
+- Basic usage dashboard (calls processed, approval rate, avg response time)
+
+**Target customer:** A single field-service company (HVAC, plumbing, property management). They pay for the volume of minutes processed.
+
+**Pricing (Phase 1):** Usage-based. $/minute of audio processed + flat monthly seat fee.
+
+---
+
+### Phase 2 — Multi-Tenant Core
+
+Multiple paying customers. Proper isolation.
+
+**What gets added:**
+- Tenant isolation: shared DB + PostgreSQL Row-Level Security (RLS) on `tenant_id`
+- Multi-user per tenant (roles: admin, dispatcher, viewer)
+- Per-tenant knowledge bases (isolated ChromaDB collections or namespaced)
+- Per-tenant API keys
+- Tenant onboarding flow (self-serve signup → config → first call)
+- Tenant admin dashboard: users, usage, audit history, integrations
+- Schema-per-tenant upgrade path for larger accounts
+- Metered billing (Stripe): minutes, calls, workflow runs
+- Email + Slack notification channels
+
+**Pricing tiers introduced:**
+
+| Plan | Limits | Price |
+|---|---|---|
+| Starter | 1 location, 1 user, 100 calls/mo | $49/mo |
+| Pro | 3 locations, 5 users, 500 calls/mo, integrations | $199/mo |
+| Business | Unlimited locations, 20 users, 2,000 calls/mo, advanced approvals | $599/mo |
+| Enterprise | Dedicated infra, SSO, SLA, custom integrations | Custom |
+
+---
+
+### Phase 3 — Workflow Builder
+
+Tenants configure their own pipelines without code.
+
+**What gets added:**
+- Visual workflow builder: drag-and-drop approval chains
+- Conditional rules: "if category=ESCALATE and urgency=HIGH, skip draft and page on-call"
+- Workflow templates per vertical (field-ops, property, legal, insurance)
+- Integration library: Calendar, Google Sheets, Salesforce, HubSpot, Linear, PagerDuty, Zapier webhook
+- Retry and fallback rules
+- SLA timers: "if no approval within 15 min, escalate to manager"
+- Multi-channel input: email, SMS, web form (voice remains primary)
+
+---
+
+### Phase 4 — Enterprise
+
+**What gets added:**
+- Dedicated database per tenant (full isolation for regulated industries)
+- SAML / SSO (Okta, Azure AD)
+- Compliance export (SOC 2 audit log format, HIPAA-aligned for healthcare)
+- White-label (customer's own domain and branding)
+- Custom LLM deployment (bring your own Azure/Bedrock endpoint)
+- SLA with uptime guarantee
+- Professional services: onboarding, integration, training
+
+---
+
+## Architecture (Phase 2 target)
+
 ```
+┌─────────────────────────────────────────────────────────┐
+│                     ArkOps Platform                      │
+│                                                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │ Tenant A │  │ Tenant B │  │ Tenant C │  ...         │
+│  │ Field Ops│  │ Property │  │ Legal    │              │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘              │
+│       │              │              │                    │
+│  ┌────▼──────────────▼──────────────▼────────────────┐  │
+│  │              Shared Engine                        │  │
+│  │  Listen → Parse → Classify → Research →           │  │
+│  │  Draft → Evaluate → Approve → Execute             │  │
+│  └────────────────────────────────────────────────┬──┘  │
+│                                                   │     │
+│  ┌──────────────────────────────────────────────┐ │     │
+│  │  PostgreSQL + RLS    ChromaDB (namespaced)   │ │     │
+│  │  tenant_id on all rows                       │ │     │
+│  └──────────────────────────────────────────────┘ │     │
+└──────────────────────────────────────────────────┘     │
+                                                         │
+       Tenant's own system (webhook / API / CRM)  ◄──────┘
+```
+
+**Isolation model (tiered):**
+
+| Stage | Isolation | When |
+|---|---|---|
+| Early | Shared schema, RLS on `tenant_id` | Phase 2 default |
+| Growth | Schema-per-tenant | Large Pro / Business accounts |
+| Enterprise | Dedicated DB + infra | Regulated industries (healthcare, legal) |
 
 ---
 
 ## Tech Stack
 
 | Layer | Choice | Why |
-|-------|--------|-----|
-| STT | AssemblyAI SDK | Required. Real-time streaming, punctuation, low latency |
-| Pipeline | LangGraph | Explicit stage graph, deterministic state transitions, easy to audit |
-| Context retrieval | ChromaDB | Local-first vector store, no external service dependency |
-| LLM | Azure OpenAI | Structured output support, deterministic temperature=0 for evaluation |
-| Backend | FastAPI + Uvicorn | Async WebSocket support, typed routes |
-| Frontend | Next.js + React + Tailwind | Approval UI, real-time transcript display |
-| WebSocket | FastAPI WebSocket | Live transcript feed from AssemblyAI to browser |
+|---|---|---|
+| STT | AssemblyAI SDK | Real-time streaming, punctuation, low latency. Required for hackathon. |
+| Pipeline | LangGraph | Explicit stage graph, deterministic state transitions, auditable |
+| Vector store | ChromaDB | Local-first, no external service dependency, namespaced per tenant |
+| LLM | Azure OpenAI (gpt-4o) | Structured output, deterministic at temp=0, enterprise SLA |
+| Backend | FastAPI + Uvicorn | Async WebSocket, typed routes, fast |
+| Frontend | Next.js + Tailwind | Approval UI, real-time transcript, SSR |
+| Auth | Clerk | Multi-tenant auth, user roles, JWT |
+| DB | PostgreSQL + RLS | Tenant isolation at DB layer |
+| Phone | Twilio | Number provisioning, inbound call webhooks |
+| Billing | Stripe | Metered usage + subscription |
+| Infra | Railway | Deploy backend + DB, zero-config multi-env |
 
 ---
 
-## Project Structure
+## Current State (Phase 0)
+
+Backend scaffold complete:
 
 ```
-voice-triage/
-├── backend/
-│   ├── main.py              # FastAPI app + WebSocket endpoint
-│   ├── pipeline/
-│   │   ├── graph.py         # LangGraph pipeline definition
-│   │   ├── stages/
-│   │   │   ├── parse.py     # Intent + entity extraction
-│   │   │   ├── classify.py  # Triage classification
-│   │   │   ├── research.py  # ChromaDB retrieval
-│   │   │   ├── draft.py     # Structured output generation
-│   │   │   ├── evaluate.py  # Adversarial self-review
-│   │   │   └── execute.py   # Approved action execution
-│   │   └── models.py        # Pydantic models for each stage I/O
-│   ├── stt/
-│   │   └── assemblyai.py    # AssemblyAI real-time transcriber
-│   ├── knowledge/
-│   │   ├── store.py         # ChromaDB client + retrieval
-│   │   └── seed.py          # Seed demo knowledge base
-│   └── audit/
-│       └── log.py           # Immutable audit trail writer
-├── frontend/
-│   ├── src/app/
-│   │   ├── page.tsx         # Main pipeline UI
-│   │   └── components/
-│   │       ├── MicCapture.tsx     # Mic button + level meter
-│   │       ├── LiveTranscript.tsx # Real-time transcript display
-│   │       ├── PipelineStatus.tsx # Stage-by-stage progress
-│   │       ├── DraftReview.tsx    # Draft + evaluation verdict
-│   │       └── ApprovalGate.tsx   # Approve / Edit / Reject
-│   └── package.json
-├── docs/
-│   ├── PIPELINE.md          # Full pipeline specification
-│   ├── SPRINT_PLAN.md       # Day-by-day build plan
-│   └── DEMO_SCRIPT.md       # Video demo script
-├── .env.example
-├── .gitignore
-├── LICENSE
-└── README.md
+backend/
+├── main.py                   # FastAPI: WS /ws/audio, POST /approve/{id}
+├── config.py                 # Pydantic Settings
+├── models/types.py           # Full type hierarchy + PipelineState
+├── pipeline/
+│   ├── listen.py             # Stage 1 — AssemblyAI STT
+│   ├── parse.py              # Stage 2 — Intent extraction
+│   ├── classify.py           # Stage 3 — TriageCategory
+│   ├── research.py           # Stage 4 — ChromaDB retrieval
+│   ├── draft.py              # Stage 5 — DraftSlots
+│   ├── evaluate.py           # Stage 6 — Adversarial self-review
+│   ├── approve.py            # Stage 7 — Human gate (async, awaits decision)
+│   └── execute.py            # Stage 8 — Dispatch on category
+└── scripts/test_mic.py       # Day 1 smoke test
 ```
+
+**Still needed (Phase 0 completion):**
+- [ ] Tenant config model + demo seed (`config/tenant_demo.yaml`)
+- [ ] `PipelineState` tenant-aware (`tenant_id` field)
+- [ ] Next.js frontend: mic capture, live transcript, approval UI
+- [ ] Integration test: full pipeline end-to-end
+- [ ] Demo video + submission
 
 ---
 
-## Setup
+## Quick Start (Phase 0 / Hackathon)
 
 ```bash
-# 1. Clone
-git clone https://github.com/Emmanuelzyronis/voice-triage.git
-cd voice-triage
+git clone https://github.com/Emmanuelzyronis/voice-triage.git arkops
+cd arkops
 
-# 2. Copy env
-cp .env.example .env
-# Fill in: ASSEMBLYAI_API_KEY, AZURE_OPENAI_*, CHROMA_PERSIST_DIRECTORY
+# Copy env — fill in your keys
+cp backend/.env.example backend/.env
 
-# 3. Backend
+# Install backend
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+pip install -e ".[mic]"         # [mic] pulls pyaudio for local mic test
 
-# 4. Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
+# Day 1 smoke test — speak, see transcript
+python -m backend.scripts.test_mic
+
+# Run server
+uvicorn backend.main:app --reload --port 8000
+
+# Frontend (separate terminal)
+cd ../frontend
+npm install && npm run dev
 # → http://localhost:3000
 ```
 
@@ -217,26 +293,28 @@ npm run dev
 ## Environment Variables
 
 ```
-ASSEMBLYAI_API_KEY=         # Required — get at app.assemblyai.com
-AZURE_OPENAI_ENDPOINT=      # e.g. https://your-resource.openai.azure.com/
+ASSEMBLYAI_API_KEY=             # app.assemblyai.com
+AZURE_OPENAI_ENDPOINT=          # https://your-resource.openai.azure.com/
 AZURE_OPENAI_API_KEY=
-AZURE_OPENAI_DEPLOYMENT=    # e.g. gpt-4o
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
 CHROMA_PERSIST_DIRECTORY=./chroma_db
+MAX_RETRIES=3
+APPROVAL_TIMEOUT_SECONDS=300
 ```
 
 ---
 
-## Submission Checklist
+## Submission Checklist (Sep 30)
 
 - [ ] AssemblyAI real-time STT working end-to-end
 - [ ] All 8 pipeline stages functional
+- [ ] Tenant config wired (demo tenant: field operations)
 - [ ] Approval gate: no action possible without APPROVED state
-- [ ] Frontend: mic capture → live transcript → pipeline status → approval UI
-- [ ] Audit trail written for every completed pipeline run
+- [ ] Frontend: mic → live transcript → pipeline stages → approval UI
+- [ ] Audit trail on every completed run
 - [ ] Demo video recorded (~3 min, see `docs/DEMO_SCRIPT.md`)
-- [ ] Slide deck (5–7 slides: problem / pipeline / demo / why it wins)
-- [ ] MIT LICENSE present in repo
-- [ ] `.env.example` present (no secrets committed)
+- [ ] `docs/PITCH.md` — platform vision, phases, expansion path
+- [ ] MIT LICENSE + `.env.example` (no secrets) in repo
 - [ ] lablab.ai submission form filled + repo linked
 - [ ] **Submit by September 30, 2026 @ 11:00 AM EDT**
 
@@ -244,4 +322,8 @@ CHROMA_PERSIST_DIRECTORY=./chroma_db
 
 ## License
 
-MIT License — see [LICENSE](./LICENSE)
+MIT — see [LICENSE](./LICENSE)
+
+---
+
+*Built by Emmanuel Ibiezugbe — [emmanuelibiezugbe.com](https://emmanuelibiezugbe.com)*
