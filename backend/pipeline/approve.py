@@ -30,12 +30,15 @@ class ApproveStage:
         status: ApprovalStatus,
         reviewer_note: str = "",
         edited_body: str | None = None,
+        edited_action_items: list[str] | None = None,
     ) -> None:
         """Called by the API layer when the human approves, rejects, or edits."""
         edited_draft: DraftSlots | None = None
         if status == ApprovalStatus.EDITED and edited_body is not None:
-            # Shallow edit: only body is editable via the minimal approval UI
-            edited_draft = DraftSlots(body=edited_body)
+            edited_draft = DraftSlots(
+                body=edited_body,
+                action_items=edited_action_items or [],
+            )
 
         self._decision = ApprovalDecision(
             status=status,

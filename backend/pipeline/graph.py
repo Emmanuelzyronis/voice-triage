@@ -87,6 +87,16 @@ def _route_after_classify(
     return "research"
 
 
+def _route_after_approve(
+    gs: GraphState,
+) -> Literal["execute", "__end__"]:
+    """REJECTED (including timeout auto-reject) → END; everything else → execute."""
+    status = gs["pipeline"].approval.status if gs["pipeline"].approval else None
+    if status == ApprovalStatus.REJECTED:
+        return "__end__"
+    return "execute"
+
+
 def _route_after_evaluate(
     gs: GraphState,
 ) -> Literal["approve", "execute"]:
@@ -145,7 +155,11 @@ def build_graph(approve_stage: ApproveStage):  # noqa: ANN201
         _route_after_evaluate,
         {"approve": "approve", "execute": "execute"},
     )
-    graph.add_edge("approve", "execute")
+    graph.add_conditional_edges(
+        "approve",
+        _route_after_approve,
+        {"execute": "execute", "__end__": END},
+    )
     graph.add_edge("execute", END)
 
     return graph.compile()

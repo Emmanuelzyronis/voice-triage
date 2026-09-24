@@ -193,6 +193,7 @@ async def _run_pipeline(
 
     except Exception as exc:  # noqa: BLE001
         logger.error("pipeline error", state_id=state.id, error=str(exc))
+        _sessions.pop(state.id, None)
         try:
             await ws.send_json({"type": "error", "state_id": state.id, "message": str(exc)})
         except Exception:
@@ -211,9 +212,10 @@ async def get_state(state_id: str) -> dict[str, Any]:
 
 
 class ApprovalRequest(BaseModel):
-    status: str          # "approved" | "rejected" | "edited"
+    status: str                          # "approved" | "rejected" | "edited"
     reviewer_note: str = ""
     edited_body: str | None = None
+    edited_action_items: list[str] = []  # original action items preserved on edit
 
 
 @app.post("/approve/{state_id}")
@@ -232,6 +234,7 @@ async def submit_approval(state_id: str, body: ApprovalRequest) -> dict[str, str
         status=status,
         reviewer_note=body.reviewer_note,
         edited_body=body.edited_body,
+        edited_action_items=body.edited_action_items,
     )
     return {"detail": "decision recorded"}
 

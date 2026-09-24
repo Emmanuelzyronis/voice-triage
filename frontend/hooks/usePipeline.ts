@@ -13,6 +13,7 @@ export interface ApprovalDecision {
   status: 'approved' | 'rejected' | 'edited'
   reviewer_note?: string
   edited_body?: string
+  edited_action_items?: string[]
 }
 
 const INITIAL_STAGES: Record<PipelineStage, StageStatus> = {

@@ -265,7 +265,12 @@ export default function ApprovalGate({ approval, phase, onDecide }: ApprovalGate
 
   function handleConfirmEdit() {
     if (!editBody.trim()) return
-    onDecide({ status: 'edited', edited_body: editBody })
+    onDecide({
+      status: 'edited',
+      edited_body: editBody,
+      // Preserve the original action items — only the body text is editable
+      edited_action_items: approval.draft?.action_items ?? [],
+    })
   }
 
   function handleReject() {
