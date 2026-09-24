@@ -39,10 +39,12 @@ class ListenStage:
         self,
         on_final: Callable[[Transcript], None] | None = None,
         on_partial: Callable[[Transcript], None] | None = None,
+        on_empty: Callable[[str], None] | None = None,
         sample_rate: int = 16_000,
     ) -> None:
         self._on_final = on_final
         self._on_partial = on_partial   # no-op: DictationTranscriber has no partial events
+        self._on_empty = on_empty       # called when transcript is blank or STT fails
         self._sample_rate = sample_rate
         self._transcriber = aai.DictationTranscriber(api_key=settings.assemblyai_api_key)
         self._session: aai.DictationLiveSession | None = None
@@ -70,6 +72,7 @@ class ListenStage:
             return
 
         on_final = self._on_final
+        on_empty = self._on_empty
 
         def _finish() -> None:
             session.close()
@@ -77,9 +80,13 @@ class ListenStage:
                 result = session.result()
             except Exception as exc:
                 logger.error("AssemblyAI DictationTranscriber error: %s", exc)
+                if on_empty:
+                    on_empty(f"Transcription failed — {exc}")
                 return
             if not result or not result.text.strip():
-                logger.info("DictationTranscriber: empty transcript, skipping pipeline")
+                logger.info("DictationTranscriber: empty transcript")
+                if on_empty:
+                    on_empty("No speech detected — please try again")
                 return
             transcript = _to_transcript(result)
             logger.info("FINAL: %s", transcript.text)

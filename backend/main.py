@@ -85,7 +85,15 @@ async def audio_ws(
             _run_pipeline(state, approve_stage, ws), loop
         )
 
-    listen = ListenStage(on_final=on_final)
+    def on_empty(reason: str) -> None:
+        """Called from AssemblyAI background thread when transcript is blank or STT fails."""
+        _sessions.pop(state.id, None)
+        asyncio.run_coroutine_threadsafe(
+            ws.send_json({"type": "error", "state_id": state.id, "message": reason}),
+            loop,
+        )
+
+    listen = ListenStage(on_final=on_final, on_empty=on_empty)
     listen.connect()
 
     try:
