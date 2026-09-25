@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     azure_openai_api_key: str
     azure_openai_deployment: str = "gpt-5-mini"
     azure_openai_api_version: str = "2025-01-01-preview"
+    azure_tts_deployment: str = "tts-1"
     chroma_persist_directory: str = "./chroma_db"
 
     # Pipeline behaviour

@@ -33,11 +33,28 @@ class ClassifyStage:
             api_key=settings.azure_openai_api_key,
             azure_deployment=settings.azure_openai_deployment,
             api_version=settings.azure_openai_api_version,
+            max_tokens=2000,
+            reasoning_effort="low",
         )
 
     def run(self, state: PipelineState) -> PipelineState:
         assert state.parsed is not None, "parsed intent required"
-        state.log("classify: start")
+
+        # ParseStage sets category + classify_reason in the same LLM call.
+        # Only fall back to a separate LLM call if parse didn't set them.
+        if state.category is not None:
+            # Apply tenant gate on whatever parse returned
+            if state.tenant and state.category not in state.tenant.allowed_categories:
+                logger.info(
+                    "classify: category %s not in tenant.allowed_categories — routing to defer",
+                    state.category,
+                )
+                state.classify_reason = f"Category '{state.category.value}' not allowed for tenant — deferred"
+                state.category = TriageCategory.DEFER
+            state.log(f"classify: category={state.category.value} (set by parse)")
+            return state
+
+        state.log("classify: start (parse did not set category — running LLM)")
 
         messages = [
             SystemMessage(content=_SYSTEM),

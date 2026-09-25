@@ -14,28 +14,23 @@ from backend.models.types import EvaluationVerdict, PipelineState
 logger = logging.getLogger(__name__)
 
 _SYSTEM = """
-You are an adversarial reviewer. Before assessing each criterion below, list three
-specific reasons this draft might be wrong or misleading given the caller's actual words
-and the retrieved context. Be specific — "unclear" is not a finding. Then, for each
-criterion, assess whether any of your stated concerns actually apply.
-
-Return JSON only — no prose, no markdown fences.
+Review this draft against the original transcript. Return JSON only — no prose, no fences.
 
 Schema:
 {
   "addresses_intent": true|false,
   "factually_grounded": true|false,
   "tone_appropriate": true|false,
-  "issues_found": ["<specific issue — quote draft text and say why it's wrong>"],
+  "issues_found": ["<specific issue with the draft>"],
   "overall": "PASS|FAIL|NEEDS_EDIT"
 }
 
 Rules:
-- addresses_intent: does the body actually respond to what the user asked?
-- factually_grounded: are all claims supported by the retrieved context? flag unsupported claims
-- tone_appropriate: is the tone suitable for the urgency and category?
-- issues_found: specific concerns that survive adversarial scrutiny — populated even on PASS
-- overall: PASS = ready to execute; NEEDS_EDIT = fixable issue; FAIL = must be redrafted
+- addresses_intent: does the body respond to what the user actually asked?
+- factually_grounded: are all claims supported by the context provided?
+- tone_appropriate: is the tone right for the urgency and category?
+- issues_found: list only real issues — empty array is fine on PASS
+- overall: PASS = ready; NEEDS_EDIT = fixable; FAIL = redraft required
 """
 
 
@@ -46,6 +41,8 @@ class EvaluateStage:
             api_key=settings.azure_openai_api_key,
             azure_deployment=settings.azure_openai_deployment,
             api_version=settings.azure_openai_api_version,
+            max_tokens=2000,
+            reasoning_effort="low",
         )
 
     def run(self, state: PipelineState) -> PipelineState:

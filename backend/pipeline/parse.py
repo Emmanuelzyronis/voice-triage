@@ -1,4 +1,4 @@
-"""Stage 2 — Parse: extract intent and entities from the final transcript."""
+"""Stage 2 — Parse + Classify: single LLM call extracts intent and assigns category."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI
 
 from backend.config import settings
-from backend.models.types import Evidence, ParsedIntent, PipelineState
+from backend.models.types import Evidence, ParsedIntent, PipelineState, TriageCategory
 
 logger = logging.getLogger(__name__)
 
 _BASE_SYSTEM = """
-You extract structured intent from a voice transcript.
+You extract structured intent from a voice transcript AND classify it in one pass.
 Return JSON only — no prose, no markdown fences.
 
 Schema:
@@ -23,14 +23,22 @@ Schema:
   "entities": { "<key>": "<value>" },
   "urgency": "low|normal|high|critical",
   "observed": ["<directly stated fact>"],
-  "inferred": ["<reasonable interpretation — label clearly>"],
-  "unknown": ["<information not available in the transcript>"]
+  "inferred": ["<reasonable interpretation>"],
+  "unknown": ["<information gap not in transcript>"],
+  "category": "action_required|info_request|escalate|defer|ambiguous",
+  "classify_reason": "<one sentence>"
 }
+
+Categories:
+- action_required: something must be done (dispatch, create, update, schedule)
+- info_request: user wants information or a summary
+- escalate: requires immediate human expert attention
+- defer: low priority, can be queued
+- ambiguous: intent cannot be determined
 
 Rules:
 - never collapse an unknown into a guess
-- inferred items must be labelled as interpretations, not facts
-- unknown items are gaps — surface them explicitly
+- keep each array to 3 items max
 """
 
 
@@ -41,6 +49,8 @@ class ParseStage:
             api_key=settings.azure_openai_api_key,
             azure_deployment=settings.azure_openai_deployment,
             api_version=settings.azure_openai_api_version,
+            max_tokens=2000,
+            reasoning_effort="low",
         )
 
     def run(self, state: PipelineState) -> PipelineState:
@@ -79,5 +89,16 @@ class ParseStage:
                 unknown=data.get("unknown", []),
             ),
         )
-        state.log(f"parse: intent='{state.parsed.intent}' urgency={state.parsed.urgency}")
+
+        # Set category + reason from the combined response so classify stage is a no-op
+        try:
+            state.category = TriageCategory(data["category"])
+        except (KeyError, ValueError):
+            state.category = TriageCategory.ACTION_REQUIRED
+        state.classify_reason = data.get("classify_reason", "")
+
+        state.log(
+            f"parse: intent='{state.parsed.intent}' urgency={state.parsed.urgency} "
+            f"category={state.category.value}"
+        )
         return state

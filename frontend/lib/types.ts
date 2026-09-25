@@ -11,13 +11,19 @@ export type StageStatus = "idle" | "running" | "complete" | "error";
 
 export type AppPhase =
   | "idle"          // mic not started
-  | "recording"     // mic active, streaming
-  | "transcribing"  // audio sent, waiting for transcript from AssemblyAI
-  | "pipeline"      // LangGraph stages running
+  | "recording"     // mic active, AI greeting delivered, user speaks first time
+  | "conversation"  // multi-turn voice dialogue in progress
+  | "pipeline"      // LangGraph stages running post-conversation
   | "approval"      // waiting at human gate
   | "executing"     // approved, execute node running
   | "complete"      // pipeline_complete received
   | "error";
+
+export interface ConversationTurn {
+  role: "user" | "assistant";
+  text: string;
+  partial?: boolean;
+}
 
 export interface Evidence {
   observed: string[];

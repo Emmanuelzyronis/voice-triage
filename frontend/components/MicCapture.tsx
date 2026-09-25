@@ -31,16 +31,11 @@ function StopIcon() {
 function statusText(phase: AppPhase): React.ReactNode {
   switch (phase) {
     case 'idle':
-      return 'Ready — click to record'
+      return 'Ready — click to start call'
     case 'recording':
-      return 'Recording… click to stop'
-    case 'transcribing':
-      return (
-        <span>
-          Transcribing
-          <span className="animate-[blink_1s_step-end_infinite]">_</span>
-        </span>
-      )
+      return 'Connected — speak when ready'
+    case 'conversation':
+      return 'Live call in progress'
     case 'pipeline':
     case 'approval':
     case 'executing':
@@ -56,7 +51,7 @@ function statusText(phase: AppPhase): React.ReactNode {
 
 export function MicCapture({ phase, micLevel, onStart, onStop }: MicCaptureProps) {
   const isIdle = phase === 'idle'
-  const isRecording = phase === 'recording'
+  const isRecording = phase === 'recording' || phase === 'conversation'
   const isDisabled = !isIdle && !isRecording
 
   function handleClick() {
@@ -88,7 +83,9 @@ export function MicCapture({ phase, micLevel, onStart, onStop }: MicCaptureProps
         </button>
       </div>
 
-      <span className="text-xs font-mono text-dim">{isIdle ? 'Start' : isRecording ? 'Stop' : ''}</span>
+      <span className="text-xs font-mono text-dim">
+        {isIdle ? 'Start Call' : phase === 'conversation' ? 'End Call' : isRecording ? 'Stop' : ''}
+      </span>
 
       {/* Level meter — only while recording */}
       {isRecording && (

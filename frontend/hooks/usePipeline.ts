@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AppPhase,
   ApprovalPayload,
+  ConversationTurn,
   PipelineCompletePayload,
   PipelineStage,
   StageStatus,
@@ -26,14 +27,47 @@ const INITIAL_STAGES: Record<PipelineStage, StageStatus> = {
   execute: 'idle',
 }
 
-const WS_URL = 'ws://localhost:8001/ws/audio?tenant_id=apex-field-services'
+const WS_URL = 'ws://localhost:8001/ws/conversation?tenant_id=apex-field-services'
 const APPROVE_URL = (id: string) => `http://localhost:8001/approve/${id}`
+const TTS_URL = 'http://localhost:8001/tts'
+
+// Queue so overlapping AI turns don't collide
+let _ttsAudio: HTMLAudioElement | null = null
+
+async function speak(text: string) {
+  if (typeof window === 'undefined') return
+  // Stop any in-flight audio
+  if (_ttsAudio) {
+    _ttsAudio.pause()
+    _ttsAudio = null
+  }
+  try {
+    const res = await fetch(TTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice: 'nova' }),
+    })
+    if (!res.ok) throw new Error(`TTS ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    _ttsAudio = audio
+    audio.onended = () => URL.revokeObjectURL(url)
+    await audio.play()
+  } catch (err) {
+    console.warn('TTS failed, falling back to browser voice:', err)
+    const utterance = new SpeechSynthesisUtterance(text)
+    window.speechSynthesis?.cancel()
+    window.speechSynthesis?.speak(utterance)
+  }
+}
 
 export function usePipeline() {
   const [phase, setPhase] = useState<AppPhase>('idle')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [tenantName, setTenantName] = useState<string | null>(null)
-  const [transcript, setTranscript] = useState<string | null>(null)
+  const [conversationTurns, setConversationTurns] = useState<ConversationTurn[]>([])
+  const [partialText, setPartialText] = useState<string | null>(null)
   const [stages, setStages] = useState<Record<PipelineStage, StageStatus>>(INITIAL_STAGES)
   const [approval, setApproval] = useState<ApprovalPayload | null>(null)
   const [result, setResult] = useState<PipelineCompletePayload | null>(null)
@@ -43,22 +77,20 @@ export function usePipeline() {
   const wsRef = useRef<WebSocket | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
-  // Keep a stable ref to the current phase so handlers don't close over stale value
   const phaseRef = useRef<AppPhase>('idle')
 
   useEffect(() => {
     phaseRef.current = phase
   }, [phase])
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      teardown()
-    }
+    return () => { teardown() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function teardown() {
+    if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null }
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     if (audioCtxRef.current?.state !== 'closed') {
@@ -77,11 +109,37 @@ export function usePipeline() {
         setTenantName(msg.tenant as string)
         break
 
+      case 'conversation_turn': {
+        const role = msg.role as 'user' | 'assistant'
+        const text = msg.text as string
+        setConversationTurns((prev) => [...prev, { role, text }])
+        // Clear partial when user turn is finalised
+        if (role === 'user') setPartialText(null)
+        // Speak AI responses
+        if (role === 'assistant') speak(text)
+        setPhase('conversation')
+        break
+      }
+
+      case 'user_partial':
+        setPartialText(msg.text as string)
+        break
+
+      case 'conversation_complete':
+        if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null }
+        setPartialText(null)
+        setPhase('pipeline')
+        break
+
       case 'stage_update': {
         const stage = msg.stage as PipelineStage
         const status = msg.status as StageStatus
         setStages((prev) => ({ ...prev, [stage]: status }))
-        if (phaseRef.current !== 'pipeline' && phaseRef.current !== 'approval' && phaseRef.current !== 'executing') {
+        if (
+          phaseRef.current !== 'pipeline' &&
+          phaseRef.current !== 'approval' &&
+          phaseRef.current !== 'executing'
+        ) {
           setPhase('pipeline')
         }
         break
@@ -90,10 +148,6 @@ export function usePipeline() {
       case 'approval_required': {
         const payload = msg as unknown as ApprovalPayload
         setApproval(payload)
-        // Persist transcript text so it stays visible during and after the approval phase
-        if (payload.parsed?.raw_text) {
-          setTranscript(payload.parsed.raw_text)
-        }
         setPhase('approval')
         break
       }
@@ -101,7 +155,6 @@ export function usePipeline() {
       case 'pipeline_complete':
         setResult(msg as unknown as PipelineCompletePayload)
         setPhase('complete')
-        // Pipeline is done — safe to close the WebSocket now
         wsRef.current?.close()
         break
 
@@ -115,7 +168,6 @@ export function usePipeline() {
   const startRecording = useCallback(async () => {
     setError(null)
 
-    // 1. Open WebSocket first
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
 
@@ -134,20 +186,17 @@ export function usePipeline() {
     }
 
     ws.onclose = (ev) => {
-      // Only treat as error if we're in an active state and it wasn't a clean close
       if (!ev.wasClean && phaseRef.current !== 'complete' && phaseRef.current !== 'idle') {
         setError('Connection closed unexpectedly')
         setPhase('error')
       }
     }
 
-    // 2. Wait for WS to open before touching mic
     await new Promise<void>((resolve, reject) => {
       ws.onopen = () => resolve()
       setTimeout(() => reject(new Error('WS open timeout')), 5000)
     })
 
-    // 3. Get mic stream
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -158,7 +207,7 @@ export function usePipeline() {
           noiseSuppression: true,
         },
       })
-    } catch (err) {
+    } catch {
       setError('Microphone access denied')
       setPhase('error')
       ws.close()
@@ -166,13 +215,12 @@ export function usePipeline() {
     }
     streamRef.current = stream
 
-    // 4. AudioContext at 16kHz
     const ctx = new AudioContext({ sampleRate: 16000 })
     audioCtxRef.current = ctx
 
     try {
       await ctx.audioWorklet.addModule('/audio-processor.js')
-    } catch (err) {
+    } catch {
       setError('AudioWorklet failed to load')
       setPhase('error')
       stream.getTracks().forEach((t) => t.stop())
@@ -183,48 +231,33 @@ export function usePipeline() {
     const source = ctx.createMediaStreamSource(stream)
     const workletNode = new AudioWorkletNode(ctx, 'audio-capture-processor')
 
-    // 5. Forward PCM to WS + compute level meter
     workletNode.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(e.data)
       }
-      // RMS level for the meter
       const int16 = new Int16Array(e.data)
       let sum = 0
       for (let i = 0; i < int16.length; i++) {
         sum += (int16[i] / 32768) ** 2
       }
-      const rms = Math.sqrt(sum / int16.length)
-      setMicLevel(Math.min(1, rms * 8))
+      setMicLevel(Math.min(1, Math.sqrt(sum / int16.length) * 8))
     }
 
     source.connect(workletNode)
-    // Don't connect worklet to destination — we don't want to hear ourselves
-    // workletNode.connect(ctx.destination)
-
     setPhase('recording')
   }, [handleServerMessage])
 
   const stopRecording = useCallback(() => {
-    // Stop mic tracks — no more audio to send
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
-
     if (audioCtxRef.current?.state !== 'closed') {
       audioCtxRef.current?.close()
     }
     audioCtxRef.current = null
-
-    // Send STOP signal instead of closing the WebSocket.
-    // The backend calls listen.close() on "STOP", which triggers AssemblyAI
-    // finalization and fires on_final. The WS stays open so stage events,
-    // approval_required, and pipeline_complete can still reach the browser.
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send('STOP')
     }
-
     setMicLevel(0)
-    setPhase('transcribing')
   }, [])
 
   const submitApproval = useCallback(
@@ -250,7 +283,8 @@ export function usePipeline() {
     setPhase('idle')
     setSessionId(null)
     setTenantName(null)
-    setTranscript(null)
+    setConversationTurns([])
+    setPartialText(null)
     setStages(INITIAL_STAGES)
     setApproval(null)
     setResult(null)
@@ -263,7 +297,8 @@ export function usePipeline() {
     phase,
     sessionId,
     tenantName,
-    transcript,
+    conversationTurns,
+    partialText,
     stages,
     approval,
     result,

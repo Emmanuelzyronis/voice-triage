@@ -20,6 +20,9 @@ htmlcov/
 # ChromaDB
 chroma_db/
 
+# Audit logs (contain PII / session data)
+audit/
+
 # Node
 node_modules/
 .next/

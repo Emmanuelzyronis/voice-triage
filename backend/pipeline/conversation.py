@@ -1,0 +1,225 @@
+"""Conversational intake agent — multi-turn voice dialogue before the pipeline."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import threading
+from collections.abc import Callable
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import AzureChatOpenAI
+
+from assemblyai.streaming.v3 import (
+    StreamingClient,
+    StreamingClientOptions,
+    StreamingEvents,
+    StreamingParameters,
+    TurnEvent,
+)
+from assemblyai.streaming.v3.models import StreamingMode
+
+from backend.config import settings
+from backend.tenants.loader import TenantConfig
+
+logger = logging.getLogger(__name__)
+
+_MAX_TURNS = 6  # stop asking after this many user turns
+
+_SYSTEM = """\
+You are a voice intake agent for {tenant_name}. Conduct a brief, warm phone call
+to gather enough information for a service request.
+
+{ai_instructions}
+
+Required before completing:
+- What the issue is (equipment type + problem description)
+- Where it is (address, unit number, or location)
+
+Optional (collect if the customer volunteers it):
+- Customer name, contact number, preferred timing
+
+Conversation so far:
+{history}
+
+User turns so far: {turn_count} (max {max_turns})
+
+Respond with JSON only:
+{{"action": "ask|complete", "message": "<1-2 natural sentences>"}}
+
+- "ask"    → you still need required info; message is ONE follow-up question
+- "complete" → you have required info, OR turn_count >= {max_turns}; message confirms logging
+
+Never ask two questions at once. Sound human, not like a form.
+"""
+
+
+class ConversationAgent:
+    """LLM-driven agent that conducts multi-turn intake turns."""
+
+    def __init__(self, tenant: TenantConfig) -> None:
+        self.tenant = tenant
+        self.turns: list[dict[str, str]] = []
+        self._llm = AzureChatOpenAI(
+            azure_endpoint=settings.azure_openai_endpoint,
+            api_key=settings.azure_openai_api_key,
+            azure_deployment=settings.azure_openai_deployment,
+            api_version=settings.azure_openai_api_version,
+            max_tokens=2000,
+            reasoning_effort="low",
+        )
+
+    @property
+    def greeting(self) -> str:
+        return f"Thank you for calling {self.tenant.name}. How can I help you today?"
+
+    def process_turn(self, user_text: str) -> tuple[str, bool]:
+        """Process one user turn. Returns (ai_response_text, is_complete)."""
+        self.turns.append({"role": "user", "text": user_text})
+
+        user_turn_count = sum(1 for t in self.turns if t["role"] == "user")
+        history_lines = [
+            f"{'Customer' if t['role'] == 'user' else 'Agent'}: {t['text']}"
+            for t in self.turns
+        ]
+
+        prompt = _SYSTEM.format(
+            tenant_name=self.tenant.name,
+            ai_instructions=self.tenant.ai_instructions or "",
+            history="\n".join(history_lines),
+            turn_count=user_turn_count,
+            max_turns=_MAX_TURNS,
+        )
+
+        response = self._llm.invoke([SystemMessage(content=prompt)])
+        try:
+            data = json.loads(response.content)
+        except json.JSONDecodeError:
+            data = {
+                "action": "complete",
+                "message": "Thank you, I have enough to log your request now.",
+            }
+
+        ai_text = data.get("message", "Thank you, logging your request now.")
+        is_complete = data.get("action") == "complete" or user_turn_count >= _MAX_TURNS
+
+        self.turns.append({"role": "assistant", "text": ai_text})
+        return ai_text, is_complete
+
+    def build_transcript_text(self) -> str:
+        """Format conversation as a labelled transcript for the pipeline."""
+        lines = [
+            f"{'Customer' if t['role'] == 'user' else 'Agent'}: {t['text']}"
+            for t in self.turns
+        ]
+        return "\n".join(lines)
+
+
+class ConversationSession:
+    """Wraps AssemblyAI v3 streaming + ConversationAgent into a call session.
+
+    All callbacks are async coroutines called via run_coroutine_threadsafe
+    from the SDK's internal receiver thread.
+    """
+
+    def __init__(
+        self,
+        tenant: TenantConfig,
+        loop: asyncio.AbstractEventLoop,
+        on_partial: Callable,       # async (text: str) -> None
+        on_user_turn: Callable,     # async (text: str) -> None
+        on_ai_turn: Callable,       # async (text: str) -> None
+        on_complete: Callable,      # async (ai_final: str, transcript: str) -> None
+        on_error: Callable,         # async (message: str) -> None
+    ) -> None:
+        self.agent = ConversationAgent(tenant)
+        self._loop = loop
+        self._on_partial = on_partial
+        self._on_user_turn = on_user_turn
+        self._on_ai_turn = on_ai_turn
+        self._on_complete = on_complete
+        self._on_error = on_error
+        self._client: StreamingClient | None = None
+        self._processing = False
+
+    def connect(self) -> None:
+        self._client = StreamingClient(
+            StreamingClientOptions(
+                api_key=settings.assemblyai_api_key,
+                api_host="streaming.assemblyai.com",
+            )
+        )
+        self._client.on(StreamingEvents.Turn, self._handle_turn)
+        self._client.on(StreamingEvents.Error, self._handle_error)
+        self._client.on(StreamingEvents.Termination, self._handle_termination)
+        self._client.connect(
+            StreamingParameters(
+                sample_rate=16000,
+                speech_model="universal-3-5-pro",
+                continuous_partials=True,
+                format_turns=True,
+                mode=StreamingMode.min_latency,
+                end_of_turn_confidence_threshold=0.7,
+            )
+        )
+        logger.info("ConversationSession: AssemblyAI v3 connected")
+
+    def stream_bytes(self, chunk: bytes) -> None:
+        if self._client:
+            self._client.stream(chunk)
+
+    def close(self) -> None:
+        if self._client:
+            try:
+                self._client.disconnect(terminate=True)
+            except Exception:
+                pass
+            self._client = None
+
+    def _run(self, coro) -> None:
+        """Schedule a coroutine on the main event loop from a background thread."""
+        asyncio.run_coroutine_threadsafe(coro, self._loop)
+
+    def _run_and_wait(self, coro, timeout: float = 30.0):
+        """Schedule a coroutine and block until it completes (for LLM calls)."""
+        fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        fut.result(timeout=timeout)
+
+    def _handle_termination(self, _client, event) -> None:
+        """Called when the AssemblyAI session closes (after disconnect).
+        If no conversation completed, signal on_error so pipeline_done is set."""
+        if not self.agent.turns:
+            self._run(self._on_error("Call ended before any speech was detected"))
+
+    def _handle_error(self, _client, event) -> None:
+        self._run(self._on_error(str(event)))
+
+    def _handle_turn(self, _client, event: TurnEvent) -> None:
+        if not event.end_of_turn:
+            if event.transcript.strip():
+                self._run(self._on_partial(event.transcript))
+            return
+
+        text = event.transcript.strip()
+        if not text or self._processing:
+            return
+
+        self._processing = True
+        threading.Thread(target=self._process_turn, args=(text,), daemon=True).start()
+
+    def _process_turn(self, user_text: str) -> None:
+        try:
+            self._run_and_wait(self._on_user_turn(user_text))
+            ai_text, is_complete = self.agent.process_turn(user_text)
+
+            if is_complete:
+                transcript = self.agent.build_transcript_text()
+                self._run_and_wait(self._on_complete(ai_text, transcript))
+            else:
+                self._run_and_wait(self._on_ai_turn(ai_text))
+        except Exception as exc:
+            logger.error("ConversationSession: turn error: %s", exc)
+            self._run(self._on_error(str(exc)))
+        finally:
+            self._processing = False

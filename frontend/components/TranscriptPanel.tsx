@@ -23,7 +23,7 @@ function Spinner() {
 export function TranscriptPanel({ phase, transcript }: TranscriptPanelProps) {
   if (phase === 'idle') return null
 
-  const showSpinner = phase === 'transcribing' && !transcript
+  const showSpinner = false && !transcript
 
   return (
     <div className="animate-fade w-full bg-surface border border-border rounded-md p-6 space-y-3">

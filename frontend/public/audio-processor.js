@@ -1,14 +1,29 @@
+// Buffer 200ms of audio before posting (AssemblyAI v3 requires chunks ≥ 50ms).
+// At 16kHz: 200ms = 3200 samples.
+const TARGET_SAMPLES = 3200
+
 class AudioCaptureProcessor extends AudioWorkletProcessor {
-  process(inputs, outputs, parameters) {
-    const input = inputs[0]
-    if (!input || !input[0]) return true
-    const float32 = input[0]
-    const int16 = new Int16Array(float32.length)
-    for (let i = 0; i < float32.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32[i]))
-      int16[i] = s < 0 ? s * 32768 : s * 32767
+  constructor() {
+    super()
+    this._buf = new Int16Array(TARGET_SAMPLES)
+    this._pos = 0
+  }
+
+  process(inputs) {
+    const ch = inputs[0]?.[0]
+    if (!ch) return true
+
+    for (let i = 0; i < ch.length; i++) {
+      const s = Math.max(-1, Math.min(1, ch[i]))
+      this._buf[this._pos++] = s < 0 ? s * 32768 : s * 32767
+
+      if (this._pos === TARGET_SAMPLES) {
+        // Transfer ownership — zero-copy
+        this.port.postMessage(this._buf.buffer, [this._buf.buffer])
+        this._buf = new Int16Array(TARGET_SAMPLES)
+        this._pos = 0
+      }
     }
-    this.port.postMessage(int16.buffer, [int16.buffer])
     return true
   }
 }
