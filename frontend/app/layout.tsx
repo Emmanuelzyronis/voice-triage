@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -7,9 +6,20 @@ export const metadata: Metadata = {
   description: 'Voice-driven operational triage platform',
 }
 
+// ClerkProvider is loaded lazily so placeholder keys don't crash the app
+async function MaybeClerkProvider({ children }: { children: React.ReactNode }) {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? ''
+  const isValidKey = key.startsWith('pk_') && key !== 'pk_test_placeholder' && key.length > 20
+
+  if (!isValidKey) return <>{children}</>
+
+  const { ClerkProvider } = await import('@clerk/nextjs')
+  return <ClerkProvider>{children}</ClerkProvider>
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <MaybeClerkProvider>
       <html lang="en" className="h-full antialiased">
         <head>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -21,6 +31,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </head>
         <body className="min-h-full bg-bg text-text font-sans">{children}</body>
       </html>
-    </ClerkProvider>
+    </MaybeClerkProvider>
   )
 }

@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['html', { open: 'never' }], ['list']],
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: 'http://localhost:3400',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',
     trace: 'on-first-retry',
@@ -18,10 +18,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev -- --port 3001',
-    url: 'http://localhost:3001',
-    reuseExistingServer: true,
-    timeout: 60_000,
-  },
+  // Dev server is managed externally — run `npm run dev` before tests
+  // In CI, set BASE_URL env var and ensure server is started separately
+  ...(process.env.CI ? {
+    webServer: {
+      command: 'npm run dev -- --port 3400',
+      url: 'http://localhost:3400',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  } : {}),
 })

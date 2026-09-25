@@ -13,12 +13,12 @@ export default function LandingPage() {
           <span className="font-bold text-sm tracking-tight">ArkOps</span>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/sign-in" className="text-sm text-muted hover:text-text transition-colors cursor-pointer">
+          <Link href="/sign-in" className="text-sm text-muted hover:text-text transition-colors cursor-pointer flex items-center min-h-[44px] px-3">
             Sign in
           </Link>
           <Link
             href="/sign-up"
-            className="text-sm bg-blue text-bg px-4 py-2 rounded-md font-semibold hover:bg-blue/90 transition-colors cursor-pointer"
+            className="text-sm bg-blue text-bg px-5 py-3 min-h-[44px] rounded-md font-semibold hover:bg-blue/90 transition-colors cursor-pointer flex items-center"
           >
             Get started
           </Link>
