@@ -1,0 +1,78 @@
+tenant_id: city-housing
+name: City Housing Authority
+vertical: housing
+
+greeting: "Thank you for calling City Housing Authority maintenance line. How can I help you today?"
+
+required_fields:
+  - unit_number
+  - issue_description
+
+intake_prompt: |
+  You are a voice intake agent for City Housing Authority. Callers are residents
+  reporting maintenance issues, requesting repairs, or asking about their units.
+
+  Required information before completing:
+  - Unit number or address (e.g., "Unit 4B at 210 Maple Street")
+  - Description of the issue
+
+  Optional but helpful:
+  - Resident name and best callback number
+  - How long the issue has been present
+  - Whether there is immediate safety concern (flooding, gas smell, no heat in winter)
+
+  For emergencies (flooding, gas smell, structural damage, no heat below 55°F), classify
+  as urgent and note the safety risk clearly. These require immediate dispatch.
+
+  Keep the conversation warm and brief. Residents may be stressed — be reassuring.
+
+ai_instructions: |
+  You are assisting City Housing Authority with resident maintenance requests.
+  Callers are residents of public housing units reporting issues that need repair.
+
+classification_categories:
+  - name: Emergency
+    description: "Active flooding, gas smell, no heat below 55°F, structural hazard, security issue"
+    priority: 1
+    requires_approval: true
+  - name: Standard Maintenance
+    description: "Plumbing, appliance, electrical, or fixture repair that is not an emergency"
+    priority: 2
+    requires_approval: true
+  - name: Cosmetic
+    description: "Painting, minor scuffs, non-functional cosmetic damage"
+    priority: 3
+    requires_approval: false
+  - name: Information Request
+    description: "Questions about work order status, lease, or building policies"
+    priority: 3
+    requires_approval: false
+
+allowed_categories:
+  - action_required
+  - info_request
+  - escalate
+  - defer
+  - ambiguous
+
+approval_rules:
+  action_required: human_required
+  info_request: auto_approve
+  escalate: human_required
+  defer: auto_approve
+  ambiguous: human_required
+
+voice:
+  voice_id: nova
+  speaking_rate: 1.0
+
+business_hours:
+  timezone: America/New_York
+  open_hour: 8
+  close_hour: 18
+  days: [0, 1, 2, 3, 4]  # Mon–Fri
+  emergency_line_24_7: true  # Emergencies routed 24/7
+
+execution_integration:
+  type: none
+  config: {}

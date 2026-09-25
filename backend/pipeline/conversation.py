@@ -27,18 +27,16 @@ logger = logging.getLogger(__name__)
 
 _MAX_TURNS = 6  # stop asking after this many user turns
 
-_SYSTEM = """\
-You are a voice intake agent for {tenant_name}. Conduct a brief, warm phone call
-to gather enough information for a service request.
+_SYSTEM_BASE = """\
+{intake_prompt}
 
-{ai_instructions}
+Required information to collect before completing:
+{required_fields_list}
 
-Required before completing:
-- What the issue is (equipment type + problem description)
-- Where it is (address, unit number, or location)
+Optional (collect only if the caller volunteers it):
+- Caller name, best callback number, preferred timing
 
-Optional (collect if the customer volunteers it):
-- Customer name, contact number, preferred timing
+{after_hours_note}
 
 Conversation so far:
 {history}
@@ -48,11 +46,54 @@ User turns so far: {turn_count} (max {max_turns})
 Respond with JSON only:
 {{"action": "ask|complete", "message": "<1-2 natural sentences>"}}
 
-- "ask"    → you still need required info; message is ONE follow-up question
-- "complete" → you have required info, OR turn_count >= {max_turns}; message confirms logging
+- "ask"      → still missing required info; message is ONE follow-up question
+- "complete" → all required info gathered, OR turn_count >= {max_turns}
 
-Never ask two questions at once. Sound human, not like a form.
+Never ask two questions at once. Sound human, not robotic.
 """
+
+_FALLBACK_INTAKE_PROMPT = """\
+You are a voice intake agent for {tenant_name}. Conduct a brief, warm call
+to gather the information needed to log a service request.
+
+{ai_instructions}
+"""
+
+
+def _build_system_prompt(tenant: TenantConfig, turn_count: int, history: str) -> str:
+    """Build the intake system prompt from tenant config."""
+    if tenant.intake_prompt:
+        intake = tenant.intake_prompt.strip()
+    else:
+        intake = _FALLBACK_INTAKE_PROMPT.format(
+            tenant_name=tenant.name,
+            ai_instructions=(tenant.ai_instructions or "").strip(),
+        ).strip()
+
+    required = tenant.required_fields or ["issue description", "location or contact info"]
+    fields_list = "\n".join(f"- {f.replace('_', ' ').title()}" for f in required)
+
+    after_hours = ""
+    if not tenant.is_open() and not tenant.business_hours.emergency_line_24_7:
+        after_hours = (
+            "NOTE: We are currently outside business hours. "
+            "In addition to the required fields, ask for a preferred callback time and number."
+        )
+    elif not tenant.is_open() and tenant.business_hours.emergency_line_24_7:
+        after_hours = (
+            "NOTE: We are currently outside regular business hours. "
+            "For non-emergency requests, ask for a preferred callback time. "
+            "For emergencies, proceed normally."
+        )
+
+    return _SYSTEM_BASE.format(
+        intake_prompt=intake,
+        required_fields_list=fields_list,
+        after_hours_note=after_hours,
+        history=history,
+        turn_count=turn_count,
+        max_turns=_MAX_TURNS,
+    )
 
 
 class ConversationAgent:
@@ -72,7 +113,7 @@ class ConversationAgent:
 
     @property
     def greeting(self) -> str:
-        return f"Thank you for calling {self.tenant.name}. How can I help you today?"
+        return self.tenant.effective_greeting()
 
     def process_turn(self, user_text: str) -> tuple[str, bool]:
         """Process one user turn. Returns (ai_response_text, is_complete)."""
@@ -84,12 +125,10 @@ class ConversationAgent:
             for t in self.turns
         ]
 
-        prompt = _SYSTEM.format(
-            tenant_name=self.tenant.name,
-            ai_instructions=self.tenant.ai_instructions or "",
-            history="\n".join(history_lines),
+        prompt = _build_system_prompt(
+            tenant=self.tenant,
             turn_count=user_turn_count,
-            max_turns=_MAX_TURNS,
+            history="\n".join(history_lines),
         )
 
         response = self._llm.invoke([SystemMessage(content=prompt)])
@@ -160,7 +199,6 @@ class ConversationSession:
                 speech_model="universal-3-5-pro",
                 continuous_partials=True,
                 mode=StreamingMode.min_latency,
-                end_of_turn_confidence_threshold=0.7,
                 voice_focus=NoiseSuppressionModel.near_field,
             )
         )

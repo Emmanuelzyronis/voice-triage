@@ -13,17 +13,28 @@ from backend.models.types import PipelineState, TriageCategory
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM = """
+_SYSTEM_BASE = """
 Classify the user intent into exactly one triage category.
-Return JSON only: {"category": "<category>", "reason": "<one sentence>"}
+Return JSON only: {{"category": "<category>", "reason": "<one sentence>"}}
 
-Categories:
+Standard categories:
 - action_required  : something must be done (send, create, update, schedule)
 - info_request     : user wants information or a summary
 - escalate         : requires immediate human expert attention
 - defer            : low priority, can be queued
 - ambiguous        : intent cannot be determined from the transcript
+{tenant_categories}
 """
+
+
+def _build_classify_system(state: PipelineState) -> str:
+    tenant_section = ""
+    if state.tenant and state.tenant.classification_categories:
+        lines = ["\nTenant-specific urgency hints (use to refine reason, not override category):"]
+        for cat in state.tenant.classification_categories:
+            lines.append(f"  [{cat.name}] priority={cat.priority}: {cat.description}")
+        tenant_section = "\n".join(lines)
+    return _SYSTEM_BASE.format(tenant_categories=tenant_section)
 
 
 class ClassifyStage:
@@ -57,7 +68,7 @@ class ClassifyStage:
         state.log("classify: start (parse did not set category — running LLM)")
 
         messages = [
-            SystemMessage(content=_SYSTEM),
+            SystemMessage(content=_build_classify_system(state)),
             HumanMessage(content=f"Intent: {state.parsed.intent}\nUrgency: {state.parsed.urgency}"),
         ]
 

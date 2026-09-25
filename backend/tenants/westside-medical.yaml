@@ -1,0 +1,84 @@
+tenant_id: westside-medical
+name: Westside Medical Group
+vertical: medical
+
+greeting: "Thank you for calling Westside Medical Group. I'll help gather some information. What's bringing you in today?"
+
+required_fields:
+  - patient_name
+  - symptom_description
+
+intake_prompt: |
+  You are a voice intake agent for Westside Medical Group. Callers are patients
+  or their caregivers requesting appointments or describing symptoms.
+
+  Your role is to gather enough information for the care team to prioritize and
+  schedule appropriately. You are NOT providing medical advice.
+
+  Required information before completing:
+  - Patient's full name
+  - Primary symptom or reason for the call
+
+  Optional but helpful:
+  - Date of birth or date of last visit (for identification)
+  - How long symptoms have been present
+  - Severity on a scale of 1-10
+  - Any relevant medications or allergies they mention
+
+  For urgent symptoms (chest pain, difficulty breathing, severe abdominal pain,
+  high fever over 103°F, sudden weakness, confusion), immediately flag as urgent
+  and advise the caller to call 911 if symptoms are severe.
+
+  Be calm, professional, and reassuring. Do not guess or diagnose.
+
+ai_instructions: |
+  You are assisting Westside Medical Group with patient intake.
+  Callers are patients or caregivers describing symptoms or requesting appointments.
+  Never provide medical advice. Always defer clinical judgment to the care team.
+
+classification_categories:
+  - name: Urgent — Possible Emergency
+    description: "Chest pain, difficulty breathing, severe pain, altered consciousness, high fever >103°F, stroke symptoms"
+    priority: 1
+    requires_approval: true
+  - name: Same-Day Appointment
+    description: "Acute illness, moderate pain, injury, fever below 103°F, infection symptoms"
+    priority: 1
+    requires_approval: true
+  - name: Routine Appointment
+    description: "Annual physical, chronic condition follow-up, minor complaint, prescription refill"
+    priority: 2
+    requires_approval: false
+  - name: Prescription / Referral
+    description: "Medication refill request or referral to specialist"
+    priority: 3
+    requires_approval: false
+
+allowed_categories:
+  - action_required
+  - info_request
+  - escalate
+  - defer
+  - ambiguous
+
+approval_rules:
+  action_required: human_required
+  info_request: auto_approve
+  escalate: human_required
+  defer: human_required
+  ambiguous: human_required
+
+voice:
+  voice_id: alloy
+  speaking_rate: 0.95
+
+business_hours:
+  timezone: America/Los_Angeles
+  open_hour: 9
+  close_hour: 17
+  days: [0, 1, 2, 3, 4]  # Mon–Fri
+  emergency_line_24_7: false  # After hours → urgent care instructions
+
+execution_integration:
+  type: none
+  config: {}

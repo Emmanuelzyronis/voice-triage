@@ -1,3 +1,15 @@
+export interface CallSummary {
+  id: string
+  tenant_id: string
+  status: 'active' | 'pending_approval' | 'approved' | 'rejected' | 'executed'
+  category: string
+  urgency: 'low' | 'medium' | 'high' | 'critical'
+  created_at: string
+  caller_snippet: string
+  draft_summary: string
+  elapsed_seconds: number
+}
+
 export type PipelineStage =
   | "parse"
   | "classify"

@@ -1,38 +1,52 @@
 tenant_id: apex-field-services
 name: Apex Field Services
+vertical: field_service
+
+greeting: "Thank you for calling Apex Field Services. How can I help you today?"
+
+required_fields:
+  - equipment_type
+  - location
+
+intake_prompt: |
+  You are a voice intake agent for Apex Field Services, a commercial HVAC, plumbing,
+  and electrical field operations company. Callers are customers or site managers
+  reporting equipment failures, requesting service visits, or asking about scheduling.
+
+  Domain vocabulary:
+  - Work order: a formal record of a service request assigned to a technician
+  - Dispatch: assigning a technician to a job and sending them to the site
+  - Emergency call: same-day or next-day urgent service (higher rate applies)
+  - Tech: field technician
+  - PM: preventive maintenance (scheduled routine inspection)
+
+  When drafting, action items follow this format:
+  - "Create work order: [description] — urgency: [low/normal/high/critical]"
+  - "Assign technician to [location] for [service type]"
+  - "Confirm appointment with customer for [date/time if known]"
 
 ai_instructions: |
   You are assisting Apex Field Services, a commercial HVAC, plumbing, and electrical
   field operations company. Callers are typically customers or site managers reporting
   equipment failures, requesting service visits, or asking about scheduling and service areas.
 
-  Domain vocabulary:
-  - Work order: a formal record of a service request, assigned to a technician
-  - Dispatch: assigning a technician to a job and sending them to the site
-  - Service visit: a scheduled on-site appointment by a technician
-  - PM (preventive maintenance): scheduled routine inspection and upkeep
-  - Emergency call: same-day or next-day urgent service, higher rate applies
-  - Tech: field technician
-  - SLA: service level agreement — response time commitment by contract tier
-
-  When extracting intent, pay attention to:
-  - Equipment type (HVAC unit, boiler, chiller, pipes, electrical panel, etc.)
-  - Urgency signals ("not working", "broken", "no heat", "flooding", "urgent", "days waiting")
-  - Scheduling preferences (specific dates, time windows, ASAP)
-  - Site details (address, floor, building name if mentioned)
-  - Contact name and callback number if stated
-
-  When drafting, action items should follow the format:
-  - "Create work order: [brief description] — urgency: [low/normal/high/critical]"
-  - "Assign technician to [location] for [service type]"
-  - "Confirm appointment with customer for [date/time if known]"
-
-approval_rules:
-  action_required: human_required
-  info_request: auto_approve
-  escalate: human_required
-  defer: auto_approve
-  ambiguous: human_required
+classification_categories:
+  - name: Emergency
+    description: "Equipment completely failed, no heat/cooling, safety hazard, flooding"
+    priority: 1
+    requires_approval: true
+  - name: Standard Service
+    description: "Routine repair, inspection, or service visit request"
+    priority: 2
+    requires_approval: true
+  - name: Information Request
+    description: "Caller wants pricing, availability, or general information"
+    priority: 3
+    requires_approval: false
+  - name: Scheduling
+    description: "Caller wants to schedule or reschedule an existing appointment"
+    priority: 3
+    requires_approval: false
 
 allowed_categories:
   - action_required
@@ -41,5 +55,27 @@ allowed_categories:
   - defer
   - ambiguous
 
+approval_rules:
+  action_required: human_required
+  info_request: auto_approve
+  escalate: human_required
+  defer: auto_approve
+  ambiguous: human_required
+
+voice:
+  voice_id: nova
+  speaking_rate: 1.0
+
+business_hours:
+  timezone: America/New_York
+  open_hour: 7
+  close_hour: 19
+  days: [0, 1, 2, 3, 4, 5]  # Mon–Sat
+  emergency_line_24_7: true
+
+execution_integration:
+  type: none
+  config: {}
+
 integrations:
-  - webhook   # Phase 1 — not active in Phase 0
+  - webhook

@@ -29,7 +29,7 @@ from backend.models.types import ApprovalStatus, PipelineState, Transcript, Tria
 from backend.pipeline import ApproveStage, ListenStage
 from backend.pipeline.conversation import ConversationSession
 from backend.pipeline.graph import build_graph
-from backend.tenants.loader import default_tenant, load_tenant
+from backend.tenants.loader import default_tenant, list_tenants, load_tenant
 
 structlog.configure(
     processors=[
@@ -398,6 +398,26 @@ async def get_audit(state_id: str) -> dict[str, Any]:
     if record is None:
         raise HTTPException(status_code=404, detail="Audit record not found")
     return record
+
+
+@app.get("/tenants")
+async def get_tenants() -> list[dict]:
+    """List all available tenants."""
+    return list_tenants()
+
+
+@app.get("/tenant/{tenant_id}/config")
+async def get_tenant_config(tenant_id: str) -> dict[str, Any]:
+    """Return public-safe tenant config (no execution integration secrets)."""
+    try:
+        tc = load_tenant(tenant_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    data = tc.model_dump()
+    # Strip secrets from execution integration
+    if "execution_integration" in data and "config" in data["execution_integration"]:
+        data["execution_integration"]["config"] = {}
+    return data
 
 
 @app.get("/health")

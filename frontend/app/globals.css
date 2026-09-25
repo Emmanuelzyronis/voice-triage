@@ -199,3 +199,33 @@ body {
   background-color: var(--color-red-dim);
   cursor: not-allowed;
 }
+
+/* Form inputs */
+.input {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--color-surface2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: border-color 150ms ease;
+  min-height: 36px;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+.input::placeholder { color: var(--color-text-dim); }
+
+/* Form label */
+.label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+}

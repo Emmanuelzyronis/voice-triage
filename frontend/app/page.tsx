@@ -1,179 +1,69 @@
-'use client'
+import Link from 'next/link'
 
-import { usePipeline } from '@/hooks/usePipeline'
-import type { ApprovalDecision } from '@/hooks/usePipeline'
-import { MicCapture } from '@/components/MicCapture'
-import { PipelineStatus } from '@/components/PipelineStatus'
-import ApprovalGate from '@/components/ApprovalGate'
-import ExecutedPanel from '@/components/ExecutedPanel'
-import ConversationView from '@/components/ConversationView'
-
-const PHASE_LABELS: Record<string, string> = {
-  idle: 'Ready',
-  recording: 'Connected',
-  conversation: 'Live Call',
-  pipeline: 'Processing',
-  approval: 'Awaiting Review',
-  executing: 'Executing',
-  complete: 'Complete',
-  error: 'Error',
-}
-
-export default function Home() {
-  const {
-    phase,
-    sessionId,
-    tenantName,
-    conversationTurns,
-    partialText,
-    stages,
-    approval,
-    result,
-    micLevel,
-    error,
-    startRecording,
-    stopRecording,
-    submitApproval,
-    reset,
-  } = usePipeline()
-
-  function handleDecide(decision: ApprovalDecision) {
-    submitApproval(decision)
-  }
-
-  const showMic = phase === 'idle' || phase === 'recording' || phase === 'conversation'
-  const showPipeline = phase === 'pipeline' || phase === 'approval' || phase === 'executing' || phase === 'complete'
-
+export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-bg text-text font-sans">
-      {/* Header */}
-      <header className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-accent flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-bg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
-            </div>
-            <span className="text-text font-semibold text-sm tracking-tight">ArkOps</span>
+    <div className="min-h-screen bg-bg text-text flex flex-col" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+      <header className="px-6 py-4 border-b border-border flex items-center justify-between max-w-6xl mx-auto w-full">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-blue flex items-center justify-center">
+            <svg className="w-3.5 h-3.5 text-bg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
           </div>
-
-          {tenantName && (
-            <span className="text-dim font-mono text-xs border-l border-border pl-4">
-              {tenantName}
-            </span>
-          )}
+          <span className="font-bold text-sm tracking-tight">ArkOps</span>
         </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className={`w-1.5 h-1.5 rounded-full ${
-              phase === 'recording' || phase === 'conversation' ? 'bg-red animate-pulse' :
-              phase === 'pipeline' ? 'bg-accent animate-pulse' :
-              phase === 'approval' ? 'bg-blue' :
-              phase === 'complete' ? 'bg-green' :
-              phase === 'error' ? 'bg-red' :
-              'bg-surface2'
-            }`} />
-            <span className="font-mono text-xs text-muted">{PHASE_LABELS[phase] ?? phase}</span>
-          </div>
-
-          {sessionId && (
-            <span className="font-mono text-xs text-dim hidden sm:block">
-              {sessionId.slice(0, 8)}
-            </span>
-          )}
+        <div className="flex items-center gap-3">
+          <Link href="/sign-in" className="text-sm text-muted hover:text-text transition-colors cursor-pointer">
+            Sign in
+          </Link>
+          <Link
+            href="/sign-up"
+            className="text-sm bg-blue text-bg px-4 py-2 rounded-md font-semibold hover:bg-blue/90 transition-colors cursor-pointer"
+          >
+            Get started
+          </Link>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-20 text-center max-w-3xl mx-auto w-full gap-8">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-surface text-xs text-muted">
+          <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />
+          AssemblyAI Voice Agent Hackathon — actively building
+        </div>
 
-        {/* Error banner */}
-        {phase === 'error' && error && (
-          <div className="bg-redDim border border-red rounded-md px-4 py-3 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-red text-sm font-mono font-medium">Error</p>
-              <p className="text-text text-sm mt-0.5">{error}</p>
-            </div>
-            <button onClick={reset} className="btn-ghost text-xs shrink-0">Reset</button>
-          </div>
-        )}
+        <h1 className="text-5xl font-bold text-text leading-tight">
+          Voice intake.<br />
+          <span className="text-blue">Human approval.</span><br />
+          Any vertical.
+        </h1>
 
-        {/* Mic control — idle / recording / conversation */}
-        {showMic && (
-          <section className="flex flex-col items-center py-6">
-            <MicCapture
-              phase={phase}
-              micLevel={micLevel}
-              onStart={startRecording}
-              onStop={stopRecording}
-            />
-          </section>
-        )}
+        <p className="text-muted text-lg max-w-xl">
+          ArkOps runs a conversational voice agent that gathers service requests,
+          processes them through an AI pipeline, and routes to a human dispatcher
+          for one-click approval before executing — for any industry.
+        </p>
 
-        {/* Live conversation view */}
-        {(phase === 'conversation' || phase === 'recording') && conversationTurns.length > 0 && (
-          <div className="bg-surface border border-border rounded-md p-5">
-            <ConversationView
-              turns={conversationTurns}
-              partialText={partialText}
-              phase={phase}
-              tenantName={tenantName}
-            />
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          <Link
+            href="/sign-up"
+            className="px-6 py-3 bg-blue text-bg rounded-lg font-semibold text-sm hover:bg-blue/90 transition-colors cursor-pointer"
+          >
+            Start free →
+          </Link>
+          <Link
+            href="https://github.com/Emmanuelzyronis/voice-triage"
+            target="_blank"
+            className="px-6 py-3 bg-surface border border-border text-text rounded-lg font-semibold text-sm hover:bg-surface2 transition-colors cursor-pointer"
+          >
+            GitHub
+          </Link>
+        </div>
 
-        {/* Conversation context strip — compact, shown during pipeline/approval */}
-        {showPipeline && conversationTurns.length > 0 && (
-          <div className="bg-surface border border-border rounded-md p-4">
-            <p className="text-xs font-mono text-dim uppercase tracking-widest mb-3">Call transcript</p>
-            <ConversationView
-              turns={conversationTurns}
-              partialText={null}
-              phase={phase}
-              tenantName={tenantName}
-              compact
-            />
-          </div>
-        )}
-
-        {/* Pipeline stage progress */}
-        {showPipeline && (
-          <PipelineStatus stages={stages} phase={phase} />
-        )}
-
-        {/* Approval gate */}
-        {(phase === 'approval' || phase === 'executing') && approval && (
-          <ApprovalGate
-            approval={approval}
-            phase={phase}
-            onDecide={handleDecide}
-          />
-        )}
-
-        {/* Result panel */}
-        {phase === 'complete' && result && sessionId && (
-          <ExecutedPanel
-            result={result}
-            stateId={sessionId}
-            onReset={reset}
-          />
-        )}
-
-        {/* Idle landing state */}
-        {phase === 'idle' && (
-          <div className="text-center py-12 flex flex-col items-center gap-3">
-            <p className="text-muted text-sm max-w-sm">
-              Start a call. ArkOps will have a conversation with the caller, then route the request to you for one-click approval before executing.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2 mt-2">
-              {['Listen', 'Ask', 'Understand', 'Draft', 'Approve', 'Execute'].map((s) => (
-                <span key={s} className="stage-badge">{s}</span>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="flex flex-wrap justify-center gap-3 text-xs text-dim pt-4">
+          {['HVAC Dispatch', 'Property Maintenance', 'Medical Triage', 'Legal Intake', 'Any Vertical'].map((v) => (
+            <span key={v} className="px-3 py-1.5 rounded-full border border-border bg-surface">{v}</span>
+          ))}
+        </div>
       </main>
     </div>
   )
