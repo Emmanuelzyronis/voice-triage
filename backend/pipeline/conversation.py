@@ -18,7 +18,7 @@ from assemblyai.streaming.v3 import (
     StreamingParameters,
     TurnEvent,
 )
-from assemblyai.streaming.v3.models import StreamingMode
+from assemblyai.streaming.v3.models import NoiseSuppressionModel, RealTimeSessionParameters, StreamingMode
 
 from backend.config import settings
 from backend.tenants.loader import TenantConfig
@@ -142,6 +142,7 @@ class ConversationSession:
         self._on_error = on_error
         self._client: StreamingClient | None = None
         self._processing = False
+        self._last_ai_response: str = ""
 
     def connect(self) -> None:
         self._client = StreamingClient(
@@ -158,9 +159,9 @@ class ConversationSession:
                 sample_rate=16000,
                 speech_model="universal-3-5-pro",
                 continuous_partials=True,
-                format_turns=True,
                 mode=StreamingMode.min_latency,
                 end_of_turn_confidence_threshold=0.7,
+                voice_focus=NoiseSuppressionModel.near_field,
             )
         )
         logger.info("ConversationSession: AssemblyAI v3 connected")
@@ -168,6 +169,14 @@ class ConversationSession:
     def stream_bytes(self, chunk: bytes) -> None:
         if self._client:
             self._client.stream(chunk)
+
+    def update_agent_context(self, ai_response: str) -> None:
+        """Push the AI's last response to AssemblyAI for Context Carryover (13.7% WER improvement)."""
+        if self._client and ai_response:
+            try:
+                self._client.set_params(RealTimeSessionParameters(agent_context=ai_response))
+            except Exception as exc:
+                logger.debug("agent_context update failed: %s", exc)
 
     def close(self) -> None:
         if self._client:
@@ -212,6 +221,10 @@ class ConversationSession:
         try:
             self._run_and_wait(self._on_user_turn(user_text))
             ai_text, is_complete = self.agent.process_turn(user_text)
+            self._last_ai_response = ai_text
+
+            # Feed AI response back to AssemblyAI for Context Carryover
+            self.update_agent_context(ai_text)
 
             if is_complete:
                 transcript = self.agent.build_transcript_text()
