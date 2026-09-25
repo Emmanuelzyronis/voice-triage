@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from backend.audit.log import read_audit
 from backend.config import settings
+from backend.db import supabase as db
 from backend.models.types import ApprovalStatus, PipelineState, Transcript, TriageCategory
 from backend.pipeline import ApproveStage, ListenStage
 from backend.pipeline.conversation import ConversationSession
@@ -79,6 +80,12 @@ async def conversation_ws(
     state = PipelineState(tenant_id=tenant.tenant_id, tenant=tenant)
     approve_stage = ApproveStage()
     _sessions[state.id] = (state, approve_stage)
+
+    # Persist call record immediately so the dispatcher can see active calls
+    await db.upsert_call(
+        settings.supabase_url, settings.supabase_service_key,
+        state_id=state.id, tenant_id=tenant.tenant_id, status="active",
+    )
 
     await ws.send_json({
         "type": "session_started",
@@ -269,7 +276,7 @@ async def _run_pipeline(
 
                 if name == "evaluate" and not approval_event_sent:
                     approval_event_sent = True
-                    await ws.send_json({
+                    payload = {
                         "type": "approval_required",
                         "state_id": cur.id,
                         "category": cur.category.value if cur.category else None,
@@ -277,7 +284,21 @@ async def _run_pipeline(
                         "parsed": cur.parsed.model_dump() if cur.parsed else {},
                         "draft": cur.draft.model_dump() if cur.draft else {},
                         "evaluation": cur.evaluation.model_dump() if cur.evaluation else {},
-                    })
+                    }
+                    await ws.send_json(payload)
+                    # Persist pending_approval status + draft to Supabase
+                    await db.upsert_call(
+                        settings.supabase_url, settings.supabase_service_key,
+                        state_id=cur.id,
+                        tenant_id=cur.tenant_id,
+                        status="pending_approval",
+                        category=cur.category.value if cur.category else None,
+                        classify_reason=cur.classify_reason,
+                        parsed=cur.parsed.model_dump() if cur.parsed else None,
+                        draft=cur.draft.model_dump() if cur.draft else None,
+                        evaluation=cur.evaluation.model_dump() if cur.evaluation else None,
+                        caller_snippet=(cur.transcript.text[:200] if cur.transcript else None),
+                    )
                 elif name == "classify" and not approval_event_sent and cur.category in (
                     TriageCategory.ESCALATE, TriageCategory.AMBIGUOUS
                 ):
@@ -291,7 +312,24 @@ async def _run_pipeline(
                         "draft": None,
                         "evaluation": None,
                     })
+                    await db.upsert_call(
+                        settings.supabase_url, settings.supabase_service_key,
+                        state_id=cur.id,
+                        tenant_id=cur.tenant_id,
+                        status="pending_approval",
+                        category=cur.category.value,
+                        classify_reason=cur.classify_reason,
+                    )
 
+        final_status = "executed" if final_state.executed else (
+            final_state.approval.status.value if final_state.approval else "complete"
+        )
+        await db.upsert_call(
+            settings.supabase_url, settings.supabase_service_key,
+            state_id=final_state.id,
+            tenant_id=final_state.tenant_id,
+            status=final_status,
+        )
         await ws.send_json({
             "type": "pipeline_complete",
             "state_id": final_state.id,
@@ -387,6 +425,22 @@ async def submit_approval(state_id: str, body: ApprovalRequest) -> dict[str, str
         edited_body=body.edited_body,
         edited_action_items=body.edited_action_items,
     )
+
+    # Look up DB call_id by state_id to write the approval record
+    db_call = await db.get_call_by_state_id(
+        settings.supabase_url, settings.supabase_service_key, state_id
+    )
+    if db_call:
+        await db.insert_approval(
+            settings.supabase_url, settings.supabase_service_key,
+            call_id=db_call["id"],
+            dispatcher_id="dispatcher",  # replaced with Clerk user ID once auth is live
+            status=body.status,
+            reviewer_note=body.reviewer_note or "",
+            edited_body=body.edited_body,
+            edited_action_items=body.edited_action_items or [],
+        )
+
     return {"detail": "decision recorded"}
 
 
@@ -398,6 +452,64 @@ async def get_audit(state_id: str) -> dict[str, Any]:
     if record is None:
         raise HTTPException(status_code=404, detail="Audit record not found")
     return record
+
+
+@app.get("/calls")
+async def get_calls(
+    tenant_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, le=200),
+) -> list[dict]:
+    """Return calls from Supabase, optionally filtered by tenant slug and/or status.
+
+    The dispatcher dashboard polls this every few seconds to populate the call queue.
+    `tenant_id` accepts either the slug (e.g. 'apex-field-services') or the UUID.
+    """
+    # Resolve slug → tenant UUID if needed
+    resolved_tenant_id: str | None = tenant_id
+    if tenant_id and not _is_uuid(tenant_id):
+        try:
+            tc = load_tenant(tenant_id)
+            resolved_tenant_id = tc.tenant_id
+        except FileNotFoundError:
+            resolved_tenant_id = None
+
+    rows = await db.list_calls(
+        settings.supabase_url, settings.supabase_service_key,
+        tenant_id=resolved_tenant_id,
+        status=status,
+        limit=limit,
+    )
+
+    # Merge with live in-memory sessions so active calls appear immediately
+    live_ids = {sid for sid in _sessions}
+    live_summaries: list[dict] = []
+    for sid, (st, _) in list(_sessions.items()):
+        if resolved_tenant_id and st.tenant_id != resolved_tenant_id:
+            continue
+        if status and st.status != status:
+            continue
+        # Only include if not already in DB rows (DB is source of truth once upserted)
+        if not any(r.get("state_id") == sid for r in rows):
+            live_summaries.append({
+                "id": sid,
+                "state_id": sid,
+                "tenant_id": st.tenant_id,
+                "status": "active",
+                "category": st.category.value if st.category else None,
+                "classify_reason": None,
+                "caller_id": None,
+                "parsed": st.parsed.model_dump() if st.parsed else None,
+                "draft": st.draft.model_dump() if st.draft else None,
+                "created_at": None,
+            })
+
+    return live_summaries + rows
+
+
+def _is_uuid(s: str) -> bool:
+    import re
+    return bool(re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", s, re.I))
 
 
 @app.get("/tenants")

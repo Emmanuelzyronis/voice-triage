@@ -1,8 +1,8 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { OrganizationSwitcher, UserButton, useOrganization } from '@clerk/nextjs'
 
 const NAV = [
   {
@@ -49,9 +49,38 @@ const NAV = [
   },
 ]
 
+function OrgFallback() {
+  return (
+    <div className="px-3 py-2 text-xs text-muted rounded-md border border-border bg-surface2">
+      Demo workspace
+    </div>
+  )
+}
+
+function UserFallback() {
+  return (
+    <>
+      <div className="w-7 h-7 rounded-full bg-blue/20 border border-blue/30 flex items-center justify-center text-xs font-bold text-blue shrink-0">
+        D
+      </div>
+      <span className="text-xs text-muted truncate">Dispatcher</span>
+    </>
+  )
+}
+
+// Dynamic imports with ssr:false prevent Clerk from throwing during SSR when no ClerkProvider
+const DynOrgSwitcher = dynamic(
+  () => import('@/components/clerk-widgets').then(m => m.ClerkOrgSwitcher),
+  { ssr: false, loading: () => <OrgFallback /> }
+)
+
+const DynUserButton = dynamic(
+  () => import('@/components/clerk-widgets').then(m => m.ClerkUserButton),
+  { ssr: false, loading: () => <UserFallback /> }
+)
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { organization } = useOrganization()
 
   return (
     <div className="flex h-screen bg-bg overflow-hidden" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
@@ -71,22 +100,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Org switcher */}
         <div className="px-3 py-3 border-b border-border">
-          <OrganizationSwitcher
-            hidePersonal
-            afterCreateOrganizationUrl="/dashboard"
-            afterSelectOrganizationUrl="/dashboard"
-            appearance={{
-              variables: {
-                colorPrimary: '#2563EB',
-                colorBackground: '#1F2937',
-                fontFamily: 'Plus Jakarta Sans, sans-serif',
-              },
-              elements: {
-                rootBox: 'w-full',
-                organizationSwitcherTrigger: 'w-full px-2 py-2 rounded-md hover:bg-surface2 text-text text-sm',
-              },
-            }}
-          />
+          <DynOrgSwitcher />
         </div>
 
         {/* Nav */}
@@ -112,17 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* User */}
         <div className="px-4 py-4 border-t border-border flex items-center gap-3">
-          <UserButton
-            appearance={{
-              variables: {
-                colorPrimary: '#2563EB',
-                fontFamily: 'Plus Jakarta Sans, sans-serif',
-              },
-            }}
-          />
-          <span className="text-xs text-muted truncate">
-            {organization?.name ?? 'Personal'}
-          </span>
+          <DynUserButton />
         </div>
       </aside>
 

@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     azure_tts_deployment: str = "tts-1"
     chroma_persist_directory: str = "./chroma_db"
 
+    # Supabase
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+
     # Pipeline behaviour
     max_retries: int = 3
     approval_timeout_seconds: int = 300  # 5 min before auto-escalate

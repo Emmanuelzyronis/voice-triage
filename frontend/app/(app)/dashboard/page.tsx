@@ -1,50 +1,20 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useOrganization } from '@clerk/nextjs'
 import CallCard, { ActiveCallCard, type CallSummary } from '@/components/CallCard'
+import { useCalls } from '@/hooks/useCalls'
 
 const STAGES = ['Listen', 'Ask', 'Understand', 'Draft', 'Approve', 'Execute']
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8001'
+const APPROVE_URL = (id: string) => `${BACKEND}/approve/${id}`
 
-const MOCK_ACTIVE: CallSummary[] = [
-  {
-    id: 'call-active-1',
-    tenant_id: 'apex-hvac',
-    status: 'active',
-    category: 'urgent',
-    urgency: 'high',
-    created_at: new Date(Date.now() - 72000).toISOString(),
-    caller_snippet: 'My AC stopped working and there are elderly people in the house, it\'s very hot',
-    draft_summary: '',
-    elapsed_seconds: 72,
-  },
-]
-
-const MOCK_PENDING: CallSummary[] = [
-  {
-    id: 'call-2',
-    tenant_id: 'apex-hvac',
-    status: 'pending_approval',
-    category: 'urgent',
-    urgency: 'critical',
-    created_at: new Date(Date.now() - 195000).toISOString(),
-    caller_snippet: 'AC compressor making loud noise and smells like burning',
-    draft_summary: 'Emergency AC inspection — burning smell + loud noise. Priority same-day dispatch to 2847 Westbrook Ave, Unit 4B.',
-    elapsed_seconds: 0,
-  },
-  {
-    id: 'call-3',
-    tenant_id: 'apex-hvac',
-    status: 'pending_approval',
-    category: 'standard',
-    urgency: 'medium',
-    created_at: new Date(Date.now() - 1020000).toISOString(),
-    caller_snippet: 'Looking to schedule annual maintenance for central heating system',
-    draft_summary: 'Routine annual HVAC maintenance — central heating system at 142 Pine Street. Schedule at customer convenience.',
-    elapsed_seconds: 0,
-  },
-]
+// Dynamically loaded (ssr:false) so Clerk hooks don't throw during SSR
+const DynOrgProvider = dynamic(
+  () => import('@/components/clerk-widgets').then(m => m.ClerkOrgSlug),
+  { ssr: false, loading: () => <DashboardContent orgSlug="demo" /> }
+)
 
 function Skeleton() {
   return (
@@ -105,22 +75,15 @@ function EmptyActive({ intakeUrl, orgSlug }: { intakeUrl: string; orgSlug: strin
   )
 }
 
-export default function DashboardPage() {
-  const { organization } = useOrganization()
+function DashboardContent({ orgSlug }: { orgSlug: string }) {
   const router = useRouter()
-  const orgSlug = organization?.slug ?? 'demo'
   const intakeUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/intake/${orgSlug}`
     : `https://app.arkops.io/intake/${orgSlug}`
 
-  const [pending, setPending] = useState<CallSummary[]>(MOCK_PENDING)
+  const { activeCalls, pendingCalls, loading, error, refetch } = useCalls(orgSlug !== 'demo' ? orgSlug : null)
   const [fading, setFading] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-
-  const dismiss = (id: string, delay = 500) => {
-    setFading(id)
-    setTimeout(() => setPending(p => p.filter(c => c.id !== id)), delay)
-  }
 
   const copyIntake = () => {
     navigator.clipboard.writeText(intakeUrl)
@@ -128,22 +91,51 @@ export default function DashboardPage() {
     setTimeout(() => setCopied(false), 1800)
   }
 
+  const handleApprove = async (id: string) => {
+    setFading(id)
+    try {
+      await fetch(APPROVE_URL(id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved', reviewer_note: '' }),
+      })
+    } catch { /* offline */ }
+    setTimeout(() => { setFading(null); refetch() }, 500)
+  }
+
+  const handleReject = async (id: string) => {
+    setFading(id)
+    try {
+      await fetch(APPROVE_URL(id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected', reviewer_note: '' }),
+      })
+    } catch { /* offline */ }
+    setTimeout(() => { setFading(null); refetch() }, 350)
+  }
+
+  const totalCount = activeCalls.length + pendingCalls.length
+
   return (
-    <div className="flex-1 flex flex-col" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+    <div className="flex-1 flex flex-col">
       {/* Header */}
       <header className="px-8 py-5 border-b border-border flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-text font-semibold">Call Queue</h1>
-          {(MOCK_ACTIVE.length + pending.length) > 0 && (
+          {totalCount > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent text-xs font-mono font-bold border border-accent/30">
-              {MOCK_ACTIVE.length + pending.length}
+              {totalCount}
             </span>
+          )}
+          {error && (
+            <span className="text-[11px] text-red/80 font-mono">⚠ {error}</span>
           )}
         </div>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />
-            Live
+            <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-red' : 'bg-green animate-pulse'}`} />
+            {error ? 'Offline' : 'Live'}
           </span>
           <button
             onClick={copyIntake}
@@ -166,12 +158,14 @@ export default function DashboardPage() {
           <div className="px-6 py-4 border-b border-border flex items-center gap-2 shrink-0">
             <span className="w-2 h-2 rounded-full bg-red animate-pulse" />
             <span className="text-xs font-semibold text-muted uppercase tracking-wider">In Progress</span>
-            <span className="px-1.5 py-0.5 rounded bg-surface2 text-dim text-xs font-mono">{MOCK_ACTIVE.length}</span>
+            <span className="px-1.5 py-0.5 rounded bg-surface2 text-dim text-xs font-mono">{activeCalls.length}</span>
           </div>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-            {MOCK_ACTIVE.length === 0
-              ? <EmptyActive intakeUrl={intakeUrl} orgSlug={orgSlug} />
-              : MOCK_ACTIVE.map(c => <ActiveCallCard key={c.id} call={c} />)
+            {loading
+              ? [1, 2].map(i => <Skeleton key={i} />)
+              : activeCalls.length === 0
+                ? <EmptyActive intakeUrl={intakeUrl} orgSlug={orgSlug} />
+                : activeCalls.map(c => <ActiveCallCard key={c.id} call={c} />)
             }
           </div>
         </section>
@@ -181,32 +175,46 @@ export default function DashboardPage() {
           <div className="px-6 py-4 border-b border-border flex items-center gap-2 shrink-0">
             <span className="w-2 h-2 rounded-full bg-accent" />
             <span className="text-xs font-semibold text-muted uppercase tracking-wider">Pending Approval</span>
-            <span className="px-1.5 py-0.5 rounded bg-surface2 text-dim text-xs font-mono">{pending.length}</span>
+            <span className="px-1.5 py-0.5 rounded bg-surface2 text-dim text-xs font-mono">{pendingCalls.length}</span>
           </div>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-            {pending.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-dim text-xs">No pending approvals</p>
-              </div>
-            ) : (
-              pending.map(call => (
-                <div
-                  key={call.id}
-                  className="transition-all duration-300"
-                  style={{ opacity: fading === call.id ? 0 : 1, transform: fading === call.id ? 'scale(0.97)' : 'scale(1)' }}
-                >
-                  <CallCard
-                    call={call}
-                    onApprove={id => dismiss(id)}
-                    onReject={id => dismiss(id, 350)}
-                    onClick={id => router.push(`/dashboard/calls/${id}`)}
-                  />
-                </div>
-              ))
-            )}
+            {loading
+              ? [1].map(i => <Skeleton key={i} />)
+              : pendingCalls.length === 0
+                ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-dim text-xs">No pending approvals</p>
+                  </div>
+                )
+                : pendingCalls.map(call => (
+                  <div
+                    key={call.id}
+                    className="transition-all duration-300"
+                    style={{
+                      opacity: fading === call.id ? 0 : 1,
+                      transform: fading === call.id ? 'scale(0.97)' : 'scale(1)',
+                    }}
+                  >
+                    <CallCard
+                      call={call}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onClick={id => router.push(`/dashboard/calls/${id}`)}
+                    />
+                  </div>
+                ))
+            }
           </div>
         </section>
       </div>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <DynOrgProvider>
+      {(slug) => <DashboardContent orgSlug={slug} />}
+    </DynOrgProvider>
   )
 }

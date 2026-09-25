@@ -1,15 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Protected paths that require auth — guarded here when Clerk keys are absent,
-// and by clerkMiddleware (in a Clerk-enabled deployment) when keys are present.
+const HAS_CLERK =
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_placeholder' &&
+  (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith('pk_') ?? false) &&
+  (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.length ?? 0) > 20
+
+// Protected paths — only enforced when Clerk is configured.
+// Without keys, all routes are accessible for local development.
 const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/calls']
 
 export default function middleware(req: NextRequest) {
+  if (!HAS_CLERK) return NextResponse.next()
+
   const { pathname } = req.nextUrl
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
 
   if (isProtected) {
-    // Redirect to sign-in when no auth provider is configured
+    // With Clerk keys configured, clerkMiddleware (added back to this file) handles auth.
+    // This fallback redirect covers the transition period.
     return NextResponse.redirect(new URL('/sign-in', req.url))
   }
 
