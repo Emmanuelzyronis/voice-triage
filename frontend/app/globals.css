@@ -241,3 +241,49 @@ button:focus {
   text-transform: uppercase;
   color: var(--color-text-dim);
 }
+
+/* ── 2026 atmospheric additions ──────────────────────────────────────────── */
+
+/* Frosted glass panel */
+.glass {
+  background: rgba(17, 24, 39, 0.65);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Panel with blue glow border */
+.panel-glow {
+  background-color: var(--color-surface);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: var(--radius-panel);
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.04) inset,
+    0 4px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Gradient logo/icon background */
+.gradient-brand {
+  background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+}
+
+/* Gradient text — hero accent */
+.text-gradient {
+  background-image: linear-gradient(135deg, #3B82F6 0%, #818CF8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Status glow rings */
+.glow-green { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18); }
+.glow-blue  { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18); }
+.glow-red   { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18); }
+
+/* Sidebar active nav item */
+.nav-active {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 2px solid var(--color-blue);
+  color: var(--color-text);
+}

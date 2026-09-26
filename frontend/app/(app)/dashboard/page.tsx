@@ -120,9 +120,9 @@ function DashboardContent({ orgSlug }: { orgSlug: string }) {
   return (
     <div className="flex-1 flex flex-col">
       {/* Header */}
-      <header className="px-8 py-5 border-b border-border flex items-center justify-between shrink-0">
+      <header className="px-8 py-5 border-b border-border/70 flex items-center justify-between shrink-0" style={{ background: 'rgba(17,24,39,0.5)' }}>
         <div className="flex items-center gap-3">
-          <h1 className="text-text font-semibold">Call Queue</h1>
+          <h1 className="text-text font-semibold tracking-tight">Call Queue</h1>
           {totalCount > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent text-xs font-mono font-bold border border-accent/30">
               {totalCount}
