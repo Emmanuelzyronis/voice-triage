@@ -6,6 +6,40 @@
 
 ---
 
+## Demo
+
+> Interactive terminal demo — [view the full case study](https://emmanuelzyronis.vercel.app/work/voice-triage)
+
+```text
+$ node dist/pipeline.js --audio field-call-recording.wav
+
+[Stage 1/8] Transcription (confidence: 0.94)
+  "Martinez badge 4482. Transformer failure line 7A, Riverside substation.
+   2,400 customers affected. No injuries. Requesting emergency crew."
+
+[Stage 2/8] Intent → EMERGENCY_DISPATCH (0.98)
+[Stage 3/8] Entities
+  Reporter: Martinez (4482) | Location: Riverside substation, line 7A
+  Impact: 2,400 customers  | Injuries: None
+
+[Stage 4/8] Risk → HIGH (7.8/10) — IMMEDIATE
+[Stage 5/8] Routing → EMERGENCY crew dispatch queue
+[Stage 6/8] Draft email to Grid Operations prepared
+
+[Stage 7/8] ⚠  HUMAN APPROVAL GATE
+  DISPATCH crew to Riverside substation
+  Severity: HIGH — 2,400 customers affected
+  [A] Approve    [R] Reject    [E] Edit
+  > A
+
+[Stage 8/8] Dispatch
+  ✓ Crew dispatch sent — ETA 18 minutes
+  ✓ Incident logged: #INC-2026-09-25-0041
+  Pipeline complete — 4.2s
+```
+
+---
+
 ## What it does
 
 ArkOps replaces the traditional "press 1 for service" IVR with a genuine AI phone agent that *has a conversation* with the caller, understands their request, and routes it to a human dispatcher for one-click approval before anything executes.

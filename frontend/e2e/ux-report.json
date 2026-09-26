@@ -1,0 +1,81 @@
+{
+  "timestamp": "2026-09-25T10:10:43.050Z",
+  "url": "http://localhost:3001",
+  "totalScore": 84,
+  "maxScore": 100,
+  "grade": "B",
+  "dimensions": [
+    {
+      "id": "contrast",
+      "label": "Text contrast ratios",
+      "score": 10,
+      "pass": true,
+      "notes": "9/9 elements have opaque backgrounds",
+      "screenshot": "01-contrast.png"
+    },
+    {
+      "id": "touch_targets",
+      "label": "Touch target sizes (44×44px min)",
+      "score": 10,
+      "pass": true,
+      "notes": "0 of 4 interactive elements below 44px"
+    },
+    {
+      "id": "focus_visible",
+      "label": "Focus indicators",
+      "score": 8,
+      "pass": true,
+      "notes": "Focus styles found in CSS"
+    },
+    {
+      "id": "loading_states",
+      "label": "Loading / skeleton states",
+      "score": 8,
+      "pass": true,
+      "notes": "Animation classes detected for loading states"
+    },
+    {
+      "id": "error_states",
+      "label": "Error handling / 404",
+      "score": 7,
+      "pass": true,
+      "notes": "404 returned status 404, page body has content"
+    },
+    {
+      "id": "responsive",
+      "label": "Mobile responsive (375px)",
+      "score": 9,
+      "pass": true,
+      "notes": "No horizontal overflow at 375px",
+      "screenshot": "06-mobile.png"
+    },
+    {
+      "id": "empty_states",
+      "label": "Empty state guidance",
+      "score": 8,
+      "pass": true,
+      "notes": "Empty state instructional copy found"
+    },
+    {
+      "id": "animation",
+      "label": "Motion quality & reduced-motion",
+      "score": 6,
+      "pass": true,
+      "notes": "Animations: true, reduced-motion support: false"
+    },
+    {
+      "id": "typography",
+      "label": "Typography hierarchy",
+      "score": 9,
+      "pass": true,
+      "notes": "H1: 48px, body: 14px, ratio: 3.4x"
+    },
+    {
+      "id": "consistency",
+      "label": "Visual consistency (buttons)",
+      "score": 9,
+      "pass": true,
+      "notes": "0 buttons with 0 unique style combos"
+    }
+  ]
+}
